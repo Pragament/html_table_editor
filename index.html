@@ -1,0 +1,3064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JavaScript Excel App</title>
+    <style>
+        /* ===== RESET & BASE ===== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ===== MENU BAR ===== */
+        .menu-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #fff;
+            padding: 4px 12px;
+            border-bottom: 1px solid #d0d7de;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            min-height: 34px;
+        }
+        .menu-bar .brand {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1a73e8;
+            margin-right: 12px;
+        }
+        .menu-bar .menu-item {
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #333;
+            transition: background 0.15s;
+            position: relative;
+        }
+        .menu-bar .menu-item:hover {
+            background: #e8ebf0;
+        }
+        .menu-bar .menu-item .shortcut {
+            font-size: 11px;
+            color: #888;
+            margin-left: 6px;
+        }
+        .menu-bar .spacer {
+            flex: 1;
+        }
+        .menu-bar .status-text {
+            font-size: 12px;
+            color: #666;
+            padding: 0 8px;
+        }
+
+        /* ===== TOOLBAR ===== */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: #f8f9fb;
+            padding: 4px 12px;
+            border-bottom: 1px solid #d0d7de;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            min-height: 38px;
+        }
+        .toolbar .group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0 6px;
+            border-right: 1px solid #d0d7de;
+        }
+        .toolbar .group:last-child {
+            border-right: none;
+        }
+        .toolbar button {
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #333;
+            transition: background 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .toolbar button:hover {
+            background: #e8ebf0;
+        }
+        .toolbar button.active {
+            background: #d2e3ff;
+            color: #1a73e8;
+        }
+        .toolbar .format-input {
+            width: 60px;
+            padding: 3px 6px;
+            border: 1px solid #d0d7de;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #fff;
+        }
+        .toolbar .format-input:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+        .toolbar .sep {
+            width: 1px;
+            height: 24px;
+            background: #d0d7de;
+        }
+
+        /* ===== FORMULA BAR ===== */
+        .formula-bar {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            padding: 2px 12px;
+            border-bottom: 1px solid #d0d7de;
+            flex-shrink: 0;
+            min-height: 32px;
+            gap: 6px;
+        }
+        .formula-bar .ref {
+            font-weight: 600;
+            font-size: 13px;
+            color: #1a73e8;
+            min-width: 60px;
+            background: #f0f2f5;
+            padding: 2px 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .formula-bar .fx-label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+        }
+        .formula-bar .formula-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            font-family: 'Segoe UI', monospace;
+            padding: 4px 8px;
+            background: transparent;
+            min-height: 28px;
+        }
+        .formula-bar .formula-input:focus {
+            background: #f8f9fb;
+            border-radius: 4px;
+        }
+
+        /* ===== TABLE CONTAINER ===== */
+        .table-wrapper {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            background: #e4e7ed;
+            padding: 0;
+        }
+        .table-container {
+            display: inline-block;
+            position: relative;
+            background: #fff;
+            margin: 0;
+            min-width: 100%;
+            min-height: 100%;
+        }
+
+        /* ===== GRID ===== */
+        .grid {
+            display: grid;
+            position: relative;
+            background: #fff;
+        }
+        /* headers */
+        .grid .corner-header {
+            background: #f0f2f5;
+            border-right: 1px solid #d0d7de;
+            border-bottom: 1px solid #d0d7de;
+            position: sticky;
+            top: 0;
+            left: 0;
+            z-index: 10;
+            width: 40px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #666;
+            font-weight: 500;
+            cursor: default;
+            background: #e8ebf0;
+        }
+        .grid .col-header {
+            background: #f0f2f5;
+            border-right: 1px solid #d0d7de;
+            border-bottom: 1px solid #d0d7de;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #444;
+            cursor: pointer;
+            transition: background 0.1s;
+            min-width: 60px;
+        }
+        .grid .col-header:hover {
+            background: #e4e7ed;
+        }
+        .grid .col-header.selected {
+            background: #d2e3ff;
+        }
+        .grid .row-header {
+            background: #f0f2f5;
+            border-right: 1px solid #d0d7de;
+            border-bottom: 1px solid #d0d7de;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 500;
+            color: #444;
+            cursor: pointer;
+            transition: background 0.1s;
+            min-height: 28px;
+        }
+        .grid .row-header:hover {
+            background: #e4e7ed;
+        }
+        .grid .row-header.selected {
+            background: #d2e3ff;
+        }
+        /* cells */
+        .grid .cell {
+            border-right: 1px solid #e4e7ed;
+            border-bottom: 1px solid #e4e7ed;
+            padding: 2px 6px;
+            font-size: 14px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            cursor: cell;
+            position: relative;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 60px;
+            min-height: 28px;
+            background: #fff;
+            transition: background 0.05s;
+            outline: none;
+        }
+        .grid .cell.selected {
+            outline: 2px solid #1a73e8;
+            outline-offset: -1px;
+            z-index: 2;
+            position: relative;
+        }
+        .grid .cell.range-selected {
+            background: #e8f0fe;
+        }
+        .grid .cell.active-cell {
+            outline: 2px solid #1a73e8;
+            outline-offset: -1px;
+            z-index: 3;
+            position: relative;
+        }
+        .grid .cell .cell-content {
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        .grid .cell .cell-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            padding: 2px 6px;
+            font-size: 14px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: transparent;
+            z-index: 1;
+        }
+        .grid .cell .cell-input:focus {
+            background: #fff;
+        }
+
+        /* ===== CORNER HANDLES ===== */
+        .handle {
+            position: absolute;
+            z-index: 20;
+            pointer-events: all;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s, box-shadow 0.15s;
+            cursor: default;
+        }
+        .handle:hover {
+            transform: scale(1.15);
+        }
+        .handle:active {
+            transform: scale(0.9);
+        }
+
+        /* Top-Left: Table Move Handle */
+        .handle-top-left {
+            width: 18px;
+            height: 18px;
+            background: #1a73e8;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+            cursor: grab;
+            top: -9px;
+            left: -9px;
+            border-radius: 50%;
+        }
+        .handle-top-left:hover {
+            box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+        }
+        .handle-top-left .icon {
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+            transform: rotate(0deg);
+        }
+
+        /* Top-Right: Column Control */
+        .handle-top-right {
+            width: 22px;
+            height: 22px;
+            background: #34a853;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            top: -11px;
+            right: -11px;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .handle-top-right:hover {
+            box-shadow: 0 2px 8px rgba(52, 168, 83, 0.4);
+        }
+        .handle-top-right .icon {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        /* Bottom-Left: Row Control */
+        .handle-bottom-left {
+            width: 22px;
+            height: 22px;
+            background: #fbbc04;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            bottom: -11px;
+            left: -11px;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+        }
+        .handle-bottom-left:hover {
+            box-shadow: 0 2px 8px rgba(251, 188, 4, 0.4);
+        }
+        .handle-bottom-left .icon {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        /* Bottom-Right: Resize Handle */
+        .handle-bottom-right {
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border: 2px solid #1a73e8;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+            cursor: nwse-resize;
+            bottom: -8px;
+            right: -8px;
+            border-radius: 2px;
+        }
+        .handle-bottom-right:hover {
+            box-shadow: 0 2px 8px rgba(26, 115, 232, 0.35);
+            border-color: #1557b0;
+        }
+        .handle-bottom-right .icon {
+            font-size: 10px;
+            color: #1a73e8;
+            line-height: 1;
+            font-weight: 700;
+        }
+
+        /* ===== AUTOFILL HANDLE (yellow) ===== */
+        .autofill-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #f9ab00;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            z-index: 25;
+            cursor: crosshair;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+            pointer-events: all;
+            display: none;
+        }
+        .autofill-handle.visible {
+            display: block;
+        }
+        .autofill-handle:hover {
+            transform: scale(1.2);
+            box-shadow: 0 2px 8px rgba(249, 171, 0, 0.4);
+        }
+
+        /* ===== SMART CELL VIEW ===== */
+        .smart-view {
+            background: #fff;
+            border-top: 1px solid #d0d7de;
+            padding: 4px 16px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+            min-height: 36px;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+        .smart-view .label {
+            color: #666;
+            font-weight: 500;
+        }
+        .smart-view .value {
+            color: #1a73e8;
+            font-weight: 600;
+            font-family: 'Segoe UI', monospace;
+            font-size: 14px;
+        }
+        .smart-view .stat-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .smart-view .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .smart-view .stat-item .stat-label {
+            color: #888;
+            font-size: 12px;
+        }
+        .smart-view .stat-item .stat-value {
+            font-weight: 600;
+            font-size: 13px;
+            color: #222;
+            font-family: 'Segoe UI', monospace;
+        }
+        .smart-view .cell-ref {
+            font-weight: 600;
+            color: #1a73e8;
+            min-width: 50px;
+        }
+
+        /* ===== RESIZE HANDLES (row/col) ===== */
+        .resize-handle-col {
+            position: absolute;
+            top: 0;
+            right: -4px;
+            width: 8px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 8;
+            background: transparent;
+        }
+        .resize-handle-col:hover {
+            background: rgba(26, 115, 232, 0.2);
+        }
+        .resize-handle-row {
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            cursor: row-resize;
+            z-index: 8;
+            background: transparent;
+        }
+        .resize-handle-row:hover {
+            background: rgba(26, 115, 232, 0.2);
+        }
+
+        /* ===== TOOLTIPS ===== */
+        .tooltip {
+            position: fixed;
+            background: #333;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.15s;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 260px;
+            text-align: center;
+        }
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        /* ===== MENU DROPDOWN ===== */
+        .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            padding: 4px 0;
+            min-width: 180px;
+            z-index: 50;
+            display: none;
+        }
+        .dropdown.open {
+            display: block;
+        }
+        .dropdown .item {
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dropdown .item:hover {
+            background: #e8f0fe;
+        }
+        .dropdown .item .shortcut {
+            color: #888;
+            font-size: 11px;
+        }
+        .dropdown .divider {
+            height: 1px;
+            background: #e4e7ed;
+            margin: 4px 8px;
+        }
+
+        /* ===== SCROLLBAR STYLING ===== */
+        .table-wrapper::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .table-wrapper::-webkit-scrollbar-track {
+            background: #e4e7ed;
+        }
+        .table-wrapper::-webkit-scrollbar-thumb {
+            background: #c1c7d0;
+            border-radius: 6px;
+        }
+        .table-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #a8aeb8;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .toolbar .group {
+                padding: 0 4px;
+            }
+            .toolbar button {
+                padding: 2px 6px;
+                font-size: 12px;
+            }
+            .menu-bar .menu-item {
+                font-size: 12px;
+                padding: 2px 6px;
+            }
+            .smart-view {
+                font-size: 12px;
+                gap: 12px;
+                padding: 4px 10px;
+            }
+        }
+
+        /* ===== SELECTION OVERLAY ===== */
+        .selection-overlay {
+            position: absolute;
+            border: 2px solid rgba(26, 115, 232, 0.25);
+            background: rgba(26, 115, 232, 0.06);
+            pointer-events: none;
+            z-index: 4;
+            display: none;
+        }
+        .selection-overlay.visible {
+            display: block;
+        }
+
+        /* ===== CONTEXT MENU ===== */
+        .context-menu {
+            position: fixed;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            padding: 4px 0;
+            min-width: 160px;
+            z-index: 60;
+            display: none;
+        }
+        .context-menu.open {
+            display: block;
+        }
+        .context-menu .item {
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #333;
+        }
+        .context-menu .item:hover {
+            background: #e8f0fe;
+        }
+        .context-menu .divider {
+            height: 1px;
+            background: #e4e7ed;
+            margin: 4px 8px;
+        }
+
+        /* ===== TABLE SELECTION INDICATOR ===== */
+        .table-selected .cell {
+            outline: 2px solid rgba(26, 115, 232, 0.15);
+        }
+        .table-selected .cell.selected {
+            outline: 3px solid #1a73e8;
+        }
+
+        /* ===== ANIMATION ===== */
+        @keyframes pulse {
+            0%,
+            100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.08);
+            }
+        }
+        .handle.pulse {
+            animation: pulse 0.6s ease 2;
+        }
+
+        /* ===== MISC ===== */
+        .hidden {
+            display: none !important;
+        }
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .text-muted {
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== MENU BAR ===== -->
+    <div class="menu-bar" id="menuBar">
+        <span class="brand">📊 Excel</span>
+        <span class="menu-item" data-menu="file">File</span>
+        <span class="menu-item" data-menu="edit">Edit</span>
+        <span class="menu-item" data-menu="view">View</span>
+        <span class="menu-item" data-menu="table">Table</span>
+        <span class="menu-item" data-menu="format">Format</span>
+        <span class="spacer"></span>
+        <span class="status-text" id="statusText">Ready</span>
+    </div>
+
+    <!-- ===== TOOLBAR ===== -->
+    <div class="toolbar" id="toolbar">
+        <div class="group">
+            <button id="btnUndo" title="Undo (Ctrl+Z)">↩</button>
+            <button id="btnRedo" title="Redo (Ctrl+Y)">↪</button>
+        </div>
+        <div class="group">
+            <button id="btnBold" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button id="btnItalic" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button id="btnUnderline" title="Underline (Ctrl+U)"><u>U</u></button>
+        </div>
+        <div class="group">
+            <select id="fontSizeSelect" class="format-input" title="Font Size">
+                <option value="10">10</option>
+                <option value="12" selected>12</option>
+                <option value="14">14</option>
+                <option value="16">16</option>
+                <option value="18">18</option>
+                <option value="24">24</option>
+            </select>
+        </div>
+        <div class="group">
+            <button id="btnFormatGeneral" title="General (Ctrl+Shift+~)">General</button>
+            <button id="btnFormatCurrency" title="Currency (Ctrl+Shift+$)">$</button>
+            <button id="btnFormatPercent" title="Percent (Ctrl+Shift+%)">%</button>
+            <button id="btnFormatDate" title="Date (Ctrl+Shift+#)">📅</button>
+        </div>
+        <div class="group">
+            <button id="btnAutoSum" title="AutoSum (Alt+=)">Σ</button>
+            <button id="btnInsertFunction" title="Insert Function (Shift+F3)">f(x)</button>
+        </div>
+        <div class="group">
+            <button id="btnMagicFill" title="Magic Fill (Ctrl+E)">✨ Magic Fill</button>
+        </div>
+    </div>
+
+    <!-- ===== FORMULA BAR ===== -->
+    <div class="formula-bar" id="formulaBar">
+        <span class="ref" id="cellRef">A1</span>
+        <span class="fx-label">fx</span>
+        <input class="formula-input" id="formulaInput" placeholder="Enter a value or formula..." spellcheck="false" />
+    </div>
+
+    <!-- ===== TABLE ===== -->
+    <div class="table-wrapper" id="tableWrapper">
+        <div class="table-container" id="tableContainer">
+            <!-- The grid will be rendered by JS -->
+            <div class="grid" id="grid"></div>
+
+            <!-- Corner Handles (overlaid) -->
+            <div class="handle handle-top-left" id="handleTopLeft" title="Move table">
+                <span class="icon">⬡</span>
+            </div>
+            <div class="handle handle-top-right" id="handleTopRight" title="Add/delete columns">
+                <span class="icon">⊕</span>
+            </div>
+            <div class="handle handle-bottom-left" id="handleBottomLeft" title="Add/delete rows">
+                <span class="icon">⊕</span>
+            </div>
+            <div class="handle handle-bottom-right" id="handleBottomRight" title="Resize table">
+                <span class="icon">▤</span>
+            </div>
+
+            <!-- AutoFill Handle -->
+            <div class="autofill-handle" id="autofillHandle"></div>
+
+            <!-- Selection overlay -->
+            <div class="selection-overlay" id="selectionOverlay"></div>
+        </div>
+    </div>
+
+    <!-- ===== SMART CELL VIEW ===== -->
+    <div class="smart-view" id="smartView">
+        <span class="cell-ref" id="smartRef">A1</span>
+        <span class="label">Value:</span>
+        <span class="value" id="smartValue">—</span>
+        <span class="stat-group" id="statGroup">
+            <span class="stat-item"><span class="stat-label">Sum:</span><span class="stat-value" id="statSum">—</span></span>
+            <span class="stat-item"><span class="stat-label">Avg:</span><span class="stat-value" id="statAvg">—</span></span>
+            <span class="stat-item"><span class="stat-label">Min:</span><span class="stat-value" id="statMin">—</span></span>
+            <span class="stat-item"><span class="stat-label">Max:</span><span class="stat-value" id="statMax">—</span></span>
+            <span class="stat-item"><span class="stat-label">Count:</span><span class="stat-value" id="statCount">—</span></span>
+        </span>
+    </div>
+
+    <!-- ===== TOOLTIP ===== -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- ===== CONTEXT MENU ===== -->
+    <div class="context-menu" id="contextMenu">
+        <div class="item" data-action="copy">Copy <span class="shortcut">Ctrl+C</span></div>
+        <div class="item" data-action="paste">Paste <span class="shortcut">Ctrl+V</span></div>
+        <div class="item" data-action="cut">Cut <span class="shortcut">Ctrl+X</span></div>
+        <div class="divider"></div>
+        <div class="item" data-action="insert-row-above">Insert row above</div>
+        <div class="item" data-action="insert-row-below">Insert row below</div>
+        <div class="item" data-action="insert-col-left">Insert column left</div>
+        <div class="item" data-action="insert-col-right">Insert column right</div>
+        <div class="divider"></div>
+        <div class="item" data-action="delete-row">Delete row</div>
+        <div class="item" data-action="delete-col">Delete column</div>
+        <div class="divider"></div>
+        <div class="item" data-action="clear">Clear contents</div>
+    </div>
+
+    <script>
+        // ========================================================================
+        //  JAVASCRIPT EXCEL APP — Full Implementation
+        // ========================================================================
+
+        (() => {
+            'use strict';
+
+            // -------- CONFIG --------
+            const ROWS = 100;
+            const COLS = 26;
+            const COL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const DEFAULT_COL_WIDTH = 80;
+            const DEFAULT_ROW_HEIGHT = 28;
+
+            // -------- STATE --------
+            const state = {
+                cells: [], // 2D array: cells[row][col] = { value, raw, style, format }
+                colWidths: [],
+                rowHeights: [],
+                selection: {
+                    type: 'none', // 'none' | 'cell' | 'range' | 'row' | 'col' | 'table'
+                    activeRow: 0,
+                    activeCol: 0,
+                    startRow: 0,
+                    startCol: 0,
+                    endRow: 0,
+                    endCol: 0,
+                    // for non-adjacent
+                    extraCells: [], // [{row, col}]
+                },
+                activeCell: { row: 0, col: 0 },
+                isEditing: false,
+                clipboard: null, // { data: 2D array, cut: boolean }
+                undoStack: [],
+                redoStack: [],
+                maxUndo: 30,
+                tableOffset: { top: 0, left: 0 }, // for move handle
+                isTableMoving: false,
+                dragState: null, // { type, startX, startY, ... }
+                autofillActive: false,
+                mouseDownCell: null,
+                isSelecting: false,
+                selectionStart: null,
+                nextId: 1,
+            };
+
+            // -------- DOM REFS --------
+            const grid = document.getElementById('grid');
+            const tableContainer = document.getElementById('tableContainer');
+            const tableWrapper = document.getElementById('tableWrapper');
+            const formulaInput = document.getElementById('formulaInput');
+            const cellRef = document.getElementById('cellRef');
+            const smartRef = document.getElementById('smartRef');
+            const smartValue = document.getElementById('smartValue');
+            const statSum = document.getElementById('statSum');
+            const statAvg = document.getElementById('statAvg');
+            const statMin = document.getElementById('statMin');
+            const statMax = document.getElementById('statMax');
+            const statCount = document.getElementById('statCount');
+            const statusText = document.getElementById('statusText');
+            const autofillHandle = document.getElementById('autofillHandle');
+            const selectionOverlay = document.getElementById('selectionOverlay');
+            const tooltip = document.getElementById('tooltip');
+            const contextMenu = document.getElementById('contextMenu');
+
+            const handleTL = document.getElementById('handleTopLeft');
+            const handleTR = document.getElementById('handleTopRight');
+            const handleBL = document.getElementById('handleBottomLeft');
+            const handleBR = document.getElementById('handleBottomRight');
+
+            // -------- INIT --------
+            function init() {
+                // Init data
+                for (let r = 0; r < ROWS; r++) {
+                    state.cells[r] = [];
+                    for (let c = 0; c < COLS; c++) {
+                        state.cells[r][c] = { value: '', raw: '', style: {}, format: 'general' };
+                    }
+                }
+                for (let c = 0; c < COLS; c++) state.colWidths[c] = DEFAULT_COL_WIDTH;
+                for (let r = 0; r < ROWS; r++) state.rowHeights[r] = DEFAULT_ROW_HEIGHT;
+
+                // Set active cell
+                state.activeCell = { row: 0, col: 0 };
+                state.selection.type = 'cell';
+                state.selection.activeRow = 0;
+                state.selection.activeCol = 0;
+                state.selection.startRow = 0;
+                state.selection.startCol = 0;
+                state.selection.endRow = 0;
+                state.selection.endCol = 0;
+
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                bindEvents();
+                setStatus('Ready');
+            }
+
+            // -------- RENDER --------
+            function render() {
+                renderGrid();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+                updateSmartView();
+            }
+
+            function renderGrid() {
+                // Build grid with row/col headers and cells
+                let html = '';
+                const totalCols = COLS + 1; // +1 for row header
+                const totalRows = ROWS + 1; // +1 for col header
+
+                // Use CSS grid with explicit sizing
+                let colTemplate = '40px ';
+                for (let c = 0; c < COLS; c++) {
+                    colTemplate += state.colWidths[c] + 'px ';
+                }
+                let rowTemplate = '28px ';
+                for (let r = 0; r < ROWS; r++) {
+                    rowTemplate += state.rowHeights[r] + 'px ';
+                }
+
+                grid.style.gridTemplateColumns = colTemplate.trim();
+                grid.style.gridTemplateRows = rowTemplate.trim();
+
+                // Corner
+                html += `<div class="corner-header" style="grid-row:1;grid-column:1;">#</div>`;
+
+                // Column headers
+                for (let c = 0; c < COLS; c++) {
+                    const letter = COL_LETTERS[c] || String.fromCharCode(65 + c);
+                    const isSelected = state.selection.type === 'col' &&
+                        c >= Math.min(state.selection.startCol, state.selection.endCol) &&
+                        c <= Math.max(state.selection.startCol, state.selection.endCol);
+                    html += `<div class="col-header${isSelected ? ' selected' : ''}" 
+                                   data-col="${c}" 
+                                   style="grid-row:1;grid-column:${c+2};">
+                                ${letter}
+                                <div class="resize-handle-col" data-col="${c}"></div>
+                             </div>`;
+                }
+
+                // Row headers + cells
+                for (let r = 0; r < ROWS; r++) {
+                    const isRowSelected = state.selection.type === 'row' &&
+                        r >= Math.min(state.selection.startRow, state.selection.endRow) &&
+                        r <= Math.max(state.selection.startRow, state.selection.endRow);
+                    html += `<div class="row-header${isRowSelected ? ' selected' : ''}" 
+                                   data-row="${r}" 
+                                   style="grid-row:${r+2};grid-column:1;">
+                                ${r+1}
+                                <div class="resize-handle-row" data-row="${r}"></div>
+                             </div>`;
+
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = state.cells[r][c];
+                        const isActive = state.activeCell.row === r && state.activeCell.col === c;
+                        const isSelected = isCellSelected(r, c);
+                        const isRange = isCellInRange(r, c);
+
+                        let classes = 'cell';
+                        if (isActive) classes += ' active-cell';
+                        if (isSelected && state.selection.type === 'cell') classes += ' selected';
+                        if (isRange && state.selection.type === 'range') classes += ' range-selected';
+                        if (isSelected && state.selection.type === 'range') classes += ' selected';
+
+                        const displayVal = getDisplayValue(cell);
+                        const styleStr = buildCellStyle(cell);
+
+                        html += `<div class="${classes}" 
+                                   data-row="${r}" data-col="${c}" 
+                                   style="grid-row:${r+2};grid-column:${c+2};${styleStr}">
+                                <span class="cell-content">${escapeHtml(displayVal)}</span>
+                             </div>`;
+                    }
+                }
+
+                grid.innerHTML = html;
+
+                // ---- Re-bind cell events ----
+                grid.querySelectorAll('.cell').forEach(el => {
+                    el.addEventListener('mousedown', onCellMouseDown);
+                    el.addEventListener('dblclick', onCellDblClick);
+                    el.addEventListener('mouseenter', onCellMouseEnter);
+                });
+
+                grid.querySelectorAll('.col-header').forEach(el => {
+                    el.addEventListener('mousedown', onColHeaderMouseDown);
+                    const handle = el.querySelector('.resize-handle-col');
+                    if (handle) handle.addEventListener('mousedown', onColResizeStart);
+                });
+
+                grid.querySelectorAll('.row-header').forEach(el => {
+                    el.addEventListener('mousedown', onRowHeaderMouseDown);
+                    const handle = el.querySelector('.resize-handle-row');
+                    if (handle) handle.addEventListener('mousedown', onRowResizeStart);
+                });
+
+                // ----- Corner header click selects all
+                const corner = grid.querySelector('.corner-header');
+                if (corner) corner.addEventListener('mousedown', () => selectAll());
+            }
+
+            // -------- HELPERS --------
+            function getDisplayValue(cell) {
+                if (!cell) return '';
+                if (cell.raw && cell.raw.startsWith('=')) {
+                    try {
+                        return evaluateFormula(cell.raw, cell);
+                    } catch (e) {
+                        return '#ERROR';
+                    }
+                }
+                if (cell.format === 'currency') {
+                    const num = parseFloat(cell.value);
+                    if (!isNaN(num)) return '$' + num.toFixed(2);
+                }
+                if (cell.format === 'percent') {
+                    const num = parseFloat(cell.value);
+                    if (!isNaN(num)) return (num * 100).toFixed(1) + '%';
+                }
+                if (cell.format === 'date') {
+                    if (cell.value && !isNaN(Date.parse(cell.value))) {
+                        const d = new Date(cell.value);
+                        return d.toLocaleDateString();
+                    }
+                }
+                return cell.value !== undefined && cell.value !== null ? String(cell.value) : '';
+            }
+
+            function buildCellStyle(cell) {
+                if (!cell || !cell.style) return '';
+                const s = cell.style;
+                let css = '';
+                if (s.bold) css += 'font-weight:bold;';
+                if (s.italic) css += 'font-style:italic;';
+                if (s.underline) css += 'text-decoration:underline;';
+                if (s.fontSize) css += `font-size:${s.fontSize}px;`;
+                if (s.color) css += `color:${s.color};`;
+                if (s.bgColor) css += `background-color:${s.bgColor};`;
+                if (s.align) css += `text-align:${s.align};`;
+                return css;
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            function isCellSelected(r, c) {
+                const sel = state.selection;
+                if (sel.type === 'cell') {
+                    return sel.activeRow === r && sel.activeCol === c;
+                }
+                if (sel.type === 'range') {
+                    return r >= Math.min(sel.startRow, sel.endRow) &&
+                        r <= Math.max(sel.startRow, sel.endRow) &&
+                        c >= Math.min(sel.startCol, sel.endCol) &&
+                        c <= Math.max(sel.startCol, sel.endCol);
+                }
+                if (sel.type === 'row') {
+                    return r >= Math.min(sel.startRow, sel.endRow) &&
+                        r <= Math.max(sel.startRow, sel.endRow);
+                }
+                if (sel.type === 'col') {
+                    return c >= Math.min(sel.startCol, sel.endCol) &&
+                        c <= Math.max(sel.startCol, sel.endCol);
+                }
+                if (sel.type === 'table') return true;
+                return false;
+            }
+
+            function isCellInRange(r, c) {
+                const sel = state.selection;
+                if (sel.type !== 'range') return false;
+                return r >= Math.min(sel.startRow, sel.endRow) &&
+                    r <= Math.max(sel.startRow, sel.endRow) &&
+                    c >= Math.min(sel.startCol, sel.endCol) &&
+                    c <= Math.max(sel.startCol, sel.endCol);
+            }
+
+            function getCell(row, col) {
+                if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return null;
+                return state.cells[row][col];
+            }
+
+            function setCellValue(row, col, value, raw) {
+                if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+                const cell = state.cells[row][col];
+                if (!cell) return;
+                const old = { ...cell };
+                cell.value = value;
+                cell.raw = raw !== undefined ? raw : String(value);
+                // auto-detect format
+                if (typeof value === 'number' && !raw?.startsWith('=')) {
+                    // keep existing format unless it's general
+                }
+                pushUndo({ type: 'cellEdit', row, col, old });
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                setStatus(`Edited cell ${colToLetter(col)}${row+1}`);
+            }
+
+            function colToLetter(c) {
+                let s = '';
+                let n = c + 1;
+                while (n > 0) {
+                    n--;
+                    s = String.fromCharCode(65 + (n % 26)) + s;
+                    n = Math.floor(n / 26);
+                }
+                return s;
+            }
+
+            function letterToCol(letter) {
+                let col = 0;
+                for (let i = 0; i < letter.length; i++) {
+                    col = col * 26 + (letter.charCodeAt(i) - 64);
+                }
+                return col - 1;
+            }
+
+            function parseCellRef(ref) {
+                const m = ref.match(/^([A-Z]+)(\d+)$/i);
+                if (!m) return null;
+                const col = letterToCol(m[1].toUpperCase());
+                const row = parseInt(m[2]) - 1;
+                if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+                return { row, col };
+            }
+
+            // -------- FORMULA EVALUATION (simple) --------
+            function evaluateFormula(raw, cell) {
+                if (!raw || !raw.startsWith('=')) return raw;
+                const expr = raw.substring(1).trim().toUpperCase();
+
+                // SUM, AVERAGE, MIN, MAX, COUNT
+                const funcMatch = expr.match(/^(SUM|AVERAGE|MIN|MAX|COUNT)\(([^)]+)\)$/);
+                if (funcMatch) {
+                    const [, func, rangeStr] = funcMatch;
+                    const range = parseRange(rangeStr);
+                    if (!range) return '#REF!';
+                    const values = getRangeValues(range);
+                    const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
+                    if (func === 'SUM') return nums.reduce((a, b) => a + b, 0);
+                    if (func === 'AVERAGE') return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+                    if (func === 'MIN') return nums.length ? Math.min(...nums) : 0;
+                    if (func === 'MAX') return nums.length ? Math.max(...nums) : 0;
+                    if (func === 'COUNT') return nums.length;
+                }
+
+                // Simple math: try to evaluate
+                try {
+                    const result = Function('"use strict"; return (' + raw.substring(1) + ')')();
+                    if (typeof result === 'number' && !isNaN(result)) return result;
+                    return raw;
+                } catch (e) {
+                    return '#ERROR';
+                }
+            }
+
+            function parseRange(rangeStr) {
+                const parts = rangeStr.split(':');
+                if (parts.length === 2) {
+                    const start = parseCellRef(parts[0].trim());
+                    const end = parseCellRef(parts[1].trim());
+                    if (start && end) {
+                        return {
+                            startRow: Math.min(start.row, end.row),
+                            startCol: Math.min(start.col, end.col),
+                            endRow: Math.max(start.row, end.row),
+                            endCol: Math.max(start.col, end.col)
+                        };
+                    }
+                }
+                const single = parseCellRef(rangeStr.trim());
+                if (single) {
+                    return { startRow: single.row, startCol: single.col, endRow: single.row, endCol: single.col };
+                }
+                return null;
+            }
+
+            function getRangeValues(range) {
+                const values = [];
+                for (let r = range.startRow; r <= range.endRow; r++) {
+                    for (let c = range.startCol; c <= range.endCol; c++) {
+                        const cell = getCell(r, c);
+                        if (cell) {
+                            const val = cell.raw && cell.raw.startsWith('=') ? evaluateFormula(cell.raw, cell) : cell.value;
+                            values.push(val);
+                        }
+                    }
+                }
+                return values;
+            }
+
+            // -------- SMART VIEW --------
+            function updateSmartView() {
+                const sel = state.selection;
+                const active = state.activeCell;
+                const ref = colToLetter(active.col) + (active.row + 1);
+                smartRef.textContent = ref;
+
+                const cell = getCell(active.row, active.col);
+                if (cell) {
+                    const display = getDisplayValue(cell);
+                    smartValue.textContent = display || '—';
+                } else {
+                    smartValue.textContent = '—';
+                }
+
+                // Stats for selection
+                let values = [];
+                if (sel.type === 'cell' || sel.type === 'none') {
+                    const c = getCell(active.row, active.col);
+                    if (c) {
+                        const v = c.raw && c.raw.startsWith('=') ? evaluateFormula(c.raw, c) : c.value;
+                        if (typeof v === 'number' && !isNaN(v)) values = [v];
+                    }
+                } else if (sel.type === 'range') {
+                    const range = {
+                        startRow: Math.min(sel.startRow, sel.endRow),
+                        startCol: Math.min(sel.startCol, sel.endCol),
+                        endRow: Math.max(sel.startRow, sel.endRow),
+                        endCol: Math.max(sel.startCol, sel.endCol)
+                    };
+                    values = getRangeValues(range);
+                } else if (sel.type === 'row') {
+                    const r = sel.activeRow;
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = getCell(r, c);
+                        if (cell) {
+                            const v = cell.raw && cell.raw.startsWith('=') ? evaluateFormula(cell.raw, cell) : cell.value;
+                            if (typeof v === 'number' && !isNaN(v)) values.push(v);
+                        }
+                    }
+                } else if (sel.type === 'col') {
+                    const c = sel.activeCol;
+                    for (let r = 0; r < ROWS; r++) {
+                        const cell = getCell(r, c);
+                        if (cell) {
+                            const v = cell.raw && cell.raw.startsWith('=') ? evaluateFormula(cell.raw, cell) : cell.value;
+                            if (typeof v === 'number' && !isNaN(v)) values.push(v);
+                        }
+                    }
+                } else if (sel.type === 'table') {
+                    for (let r = 0; r < ROWS; r++) {
+                        for (let c = 0; c < COLS; c++) {
+                            const cell = getCell(r, c);
+                            if (cell) {
+                                const v = cell.raw && cell.raw.startsWith('=') ? evaluateFormula(cell.raw, cell) : cell
+                                .value;
+                                if (typeof v === 'number' && !isNaN(v)) values.push(v);
+                            }
+                        }
+                    }
+                }
+
+                if (values.length > 0) {
+                    const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
+                    statSum.textContent = nums.reduce((a, b) => a + b, 0).toFixed(2);
+                    statAvg.textContent = nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2) : '—';
+                    statMin.textContent = nums.length ? Math.min(...nums).toFixed(2) : '—';
+                    statMax.textContent = nums.length ? Math.max(...nums).toFixed(2) : '—';
+                    statCount.textContent = nums.length;
+                } else {
+                    statSum.textContent = '—';
+                    statAvg.textContent = '—';
+                    statMin.textContent = '—';
+                    statMax.textContent = '—';
+                    statCount.textContent = '—';
+                }
+            }
+
+            // -------- FORMULA BAR --------
+            function updateFormulaBar() {
+                const active = state.activeCell;
+                const ref = colToLetter(active.col) + (active.row + 1);
+                cellRef.textContent = ref;
+                const cell = getCell(active.row, active.col);
+                if (cell) {
+                    formulaInput.value = cell.raw !== undefined && cell.raw !== null ? cell.raw : '';
+                } else {
+                    formulaInput.value = '';
+                }
+            }
+
+            // -------- HANDLES --------
+            function updateHandles() {
+                // Position handles based on table size
+                const gridRect = grid.getBoundingClientRect();
+                const containerRect = tableContainer.getBoundingClientRect();
+
+                // Get table dimensions from grid
+                const totalW = state.colWidths.reduce((a, b) => a + b, 0) + 40;
+                const totalH = state.rowHeights.reduce((a, b) => a + b, 0) + 28;
+
+                // Handles are positioned relative to table-container
+                // We need to account for scroll
+                const scrollLeft = tableWrapper.scrollLeft;
+                const scrollTop = tableWrapper.scrollTop;
+
+                // Position handles at the corners of the table (including headers)
+                const left = 40 - scrollLeft;
+                const top = 28 - scrollTop;
+                const right = totalW - scrollLeft;
+                const bottom = totalH - scrollTop;
+
+                handleTL.style.left = (left - 9) + 'px';
+                handleTL.style.top = (top - 9) + 'px';
+
+                handleTR.style.left = (right - 11) + 'px';
+                handleTR.style.top = (top - 11) + 'px';
+
+                handleBL.style.left = (left - 11) + 'px';
+                handleBL.style.top = (bottom - 11) + 'px';
+
+                handleBR.style.left = (right - 8) + 'px';
+                handleBR.style.top = (bottom - 8) + 'px';
+
+                // Update handle visibility based on selection
+                const isTableSelected = state.selection.type === 'table';
+                handleTL.style.display = 'flex';
+                handleTR.style.display = isTableSelected ? 'flex' : 'flex';
+                handleBL.style.display = isTableSelected ? 'flex' : 'flex';
+                handleBR.style.display = isTableSelected ? 'flex' : 'flex';
+
+                // Icon for TR/BL based on state
+                const trIcon = handleTR.querySelector('.icon');
+                const blIcon = handleBL.querySelector('.icon');
+                // Toggle between + and - on hover handled by events
+            }
+
+            function updateAutofillHandle() {
+                const sel = state.selection;
+                if (sel.type === 'cell' || sel.type === 'range') {
+                    const active = state.activeCell;
+                    const cellEl = getCellElement(active.row, active.col);
+                    if (cellEl) {
+                        const rect = cellEl.getBoundingClientRect();
+                        const containerRect = tableContainer.getBoundingClientRect();
+                        autofillHandle.style.left = (rect.right - containerRect.left - 5) + 'px';
+                        autofillHandle.style.top = (rect.bottom - containerRect.top - 5) + 'px';
+                        autofillHandle.classList.add('visible');
+                    } else {
+                        autofillHandle.classList.remove('visible');
+                    }
+                } else {
+                    autofillHandle.classList.remove('visible');
+                }
+            }
+
+            function updateSelectionOverlay() {
+                const sel = state.selection;
+                if (sel.type === 'range') {
+                    const r1 = Math.min(sel.startRow, sel.endRow);
+                    const r2 = Math.max(sel.startRow, sel.endRow);
+                    const c1 = Math.min(sel.startCol, sel.endCol);
+                    const c2 = Math.max(sel.startCol, sel.endCol);
+
+                    const topLeft = getCellPosition(r1, c1);
+                    const bottomRight = getCellPosition(r2, c2);
+                    if (topLeft && bottomRight) {
+                        const containerRect = tableContainer.getBoundingClientRect();
+                        const scrollLeft = tableWrapper.scrollLeft;
+                        const scrollTop = tableWrapper.scrollTop;
+
+                        selectionOverlay.style.left = (topLeft.left - containerRect.left + scrollLeft) + 'px';
+                        selectionOverlay.style.top = (topLeft.top - containerRect.top + scrollTop) + 'px';
+                        selectionOverlay.style.width = (bottomRight.right - topLeft.left) + 'px';
+                        selectionOverlay.style.height = (bottomRight.bottom - topLeft.top) + 'px';
+                        selectionOverlay.classList.add('visible');
+                    } else {
+                        selectionOverlay.classList.remove('visible');
+                    }
+                } else {
+                    selectionOverlay.classList.remove('visible');
+                }
+            }
+
+            function getCellPosition(row, col) {
+                const cells = grid.querySelectorAll('.cell');
+                for (const el of cells) {
+                    if (parseInt(el.dataset.row) === row && parseInt(el.dataset.col) === col) {
+                        return el.getBoundingClientRect();
+                    }
+                }
+                return null;
+            }
+
+            function getCellElement(row, col) {
+                const cells = grid.querySelectorAll('.cell');
+                for (const el of cells) {
+                    if (parseInt(el.dataset.row) === row && parseInt(el.dataset.col) === col) {
+                        return el;
+                    }
+                }
+                return null;
+            }
+
+            // -------- SELECTION --------
+            function selectCell(row, col, extend = false) {
+                if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+                if (!extend) {
+                    state.selection.type = 'cell';
+                    state.selection.activeRow = row;
+                    state.selection.activeCol = col;
+                    state.selection.startRow = row;
+                    state.selection.startCol = col;
+                    state.selection.endRow = row;
+                    state.selection.endCol = col;
+                } else {
+                    state.selection.type = 'range';
+                    state.selection.endRow = row;
+                    state.selection.endCol = col;
+                }
+                state.activeCell.row = row;
+                state.activeCell.col = col;
+                state.isEditing = false;
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function selectRange(startRow, startCol, endRow, endCol) {
+                state.selection.type = 'range';
+                state.selection.startRow = startRow;
+                state.selection.startCol = startCol;
+                state.selection.endRow = endRow;
+                state.selection.endCol = endCol;
+                state.selection.activeRow = endRow;
+                state.selection.activeCol = endCol;
+                state.activeCell.row = endRow;
+                state.activeCell.col = endCol;
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function selectRow(row) {
+                state.selection.type = 'row';
+                state.selection.activeRow = row;
+                state.selection.startRow = row;
+                state.selection.endRow = row;
+                state.selection.startCol = 0;
+                state.selection.endCol = COLS - 1;
+                state.activeCell.row = row;
+                state.activeCell.col = 0;
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function selectCol(col) {
+                state.selection.type = 'col';
+                state.selection.activeCol = col;
+                state.selection.startCol = col;
+                state.selection.endCol = col;
+                state.selection.startRow = 0;
+                state.selection.endRow = ROWS - 1;
+                state.activeCell.row = 0;
+                state.activeCell.col = col;
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function selectAll() {
+                state.selection.type = 'table';
+                state.selection.startRow = 0;
+                state.selection.startCol = 0;
+                state.selection.endRow = ROWS - 1;
+                state.selection.endCol = COLS - 1;
+                state.activeCell.row = 0;
+                state.activeCell.col = 0;
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+                setStatus('Selected entire table');
+            }
+
+            // -------- EVENTS: CELLS --------
+            let isMouseDown = false;
+            let mouseDownRow = -1,
+                mouseDownCol = -1;
+
+            function onCellMouseDown(e) {
+                e.preventDefault();
+                const row = parseInt(this.dataset.row);
+                const col = parseInt(this.dataset.col);
+                if (isNaN(row) || isNaN(col)) return;
+
+                // Check if we're in the formula input
+                if (document.activeElement === formulaInput) return;
+
+                const isCmd = e.metaKey || e.ctrlKey;
+
+                if (isCmd) {
+                    // Non-adjacent selection (Cmd+Click)
+                    // For simplicity, we'll just select the cell
+                    selectCell(row, col, false);
+                    return;
+                }
+
+                if (e.shiftKey) {
+                    // Extend selection
+                    const sel = state.selection;
+                    if (sel.type === 'cell' || sel.type === 'range') {
+                        selectRange(sel.startRow, sel.startCol, row, col);
+                    } else {
+                        selectCell(row, col, false);
+                    }
+                    return;
+                }
+
+                // Start drag selection
+                isMouseDown = true;
+                mouseDownRow = row;
+                mouseDownCol = col;
+                state.isSelecting = true;
+                state.selectionStart = { row, col };
+                selectCell(row, col, false);
+            }
+
+            function onCellDblClick(e) {
+                const row = parseInt(this.dataset.row);
+                const col = parseInt(this.dataset.col);
+                if (isNaN(row) || isNaN(col)) return;
+                startEditing(row, col);
+            }
+
+            function onCellMouseEnter(e) {
+                if (!isMouseDown || !state.isSelecting) return;
+                const row = parseInt(this.dataset.row);
+                const col = parseInt(this.dataset.col);
+                if (isNaN(row) || isNaN(col)) return;
+                if (state.selectionStart) {
+                    selectRange(
+                        state.selectionStart.row,
+                        state.selectionStart.col,
+                        row, col
+                    );
+                }
+            }
+
+            // -------- EVENTS: HEADERS --------
+            function onColHeaderMouseDown(e) {
+                e.preventDefault();
+                const col = parseInt(this.dataset.col);
+                if (isNaN(col)) return;
+                if (e.shiftKey) {
+                    // Extend column selection
+                    const sel = state.selection;
+                    if (sel.type === 'col') {
+                        const start = sel.startCol;
+                        const end = col;
+                        state.selection.startCol = Math.min(start, end);
+                        state.selection.endCol = Math.max(start, end);
+                        state.selection.activeCol = col;
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                        updateHandles();
+                        updateAutofillHandle();
+                        updateSelectionOverlay();
+                    } else {
+                        selectCol(col);
+                    }
+                    return;
+                }
+                selectCol(col);
+            }
+
+            function onRowHeaderMouseDown(e) {
+                e.preventDefault();
+                const row = parseInt(this.dataset.row);
+                if (isNaN(row)) return;
+                if (e.shiftKey) {
+                    const sel = state.selection;
+                    if (sel.type === 'row') {
+                        const start = sel.startRow;
+                        const end = row;
+                        state.selection.startRow = Math.min(start, end);
+                        state.selection.endRow = Math.max(start, end);
+                        state.selection.activeRow = row;
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                        updateHandles();
+                        updateAutofillHandle();
+                        updateSelectionOverlay();
+                    } else {
+                        selectRow(row);
+                    }
+                    return;
+                }
+                selectRow(row);
+            }
+
+            // -------- RESIZE --------
+            let resizeData = null;
+
+            function onColResizeStart(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                const col = parseInt(this.dataset.col);
+                if (isNaN(col)) return;
+                const startX = e.clientX;
+                const startWidth = state.colWidths[col];
+                resizeData = { type: 'col', col, startX, startWidth };
+                document.addEventListener('mousemove', onResizeMove);
+                document.addEventListener('mouseup', onResizeEnd);
+                setStatus(`Resizing column ${colToLetter(col)}`);
+            }
+
+            function onRowResizeStart(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                const row = parseInt(this.dataset.row);
+                if (isNaN(row)) return;
+                const startY = e.clientY;
+                const startHeight = state.rowHeights[row];
+                resizeData = { type: 'row', row, startY, startHeight };
+                document.addEventListener('mousemove', onResizeMove);
+                document.addEventListener('mouseup', onResizeEnd);
+                setStatus(`Resizing row ${row+1}`);
+            }
+
+            function onResizeMove(e) {
+                if (!resizeData) return;
+                if (resizeData.type === 'col') {
+                    const delta = e.clientX - resizeData.startX;
+                    const newWidth = Math.max(20, resizeData.startWidth + delta);
+                    state.colWidths[resizeData.col] = newWidth;
+                    renderGrid();
+                    updateHandles();
+                    updateAutofillHandle();
+                    updateSelectionOverlay();
+                } else if (resizeData.type === 'row') {
+                    const delta = e.clientY - resizeData.startY;
+                    const newHeight = Math.max(16, resizeData.startHeight + delta);
+                    state.rowHeights[resizeData.row] = newHeight;
+                    renderGrid();
+                    updateHandles();
+                    updateAutofillHandle();
+                    updateSelectionOverlay();
+                }
+            }
+
+            function onResizeEnd(e) {
+                document.removeEventListener('mousemove', onResizeMove);
+                document.removeEventListener('mouseup', onResizeEnd);
+                if (resizeData) {
+                    setStatus('Resize complete');
+                    resizeData = null;
+                }
+                isMouseDown = false;
+                state.isSelecting = false;
+            }
+
+            // -------- EDITING --------
+            function startEditing(row, col) {
+                state.isEditing = true;
+                const cell = getCell(row, col);
+                if (!cell) return;
+                const el = getCellElement(row, col);
+                if (!el) return;
+
+                // Replace content with input
+                const input = document.createElement('input');
+                input.className = 'cell-input';
+                input.type = 'text';
+                input.value = cell.raw !== undefined && cell.raw !== null ? cell.raw : '';
+                input.spellcheck = false;
+                el.appendChild(input);
+                input.focus();
+                input.select();
+
+                const finish = (save) => {
+                    if (save) {
+                        const val = input.value;
+                        if (val.startsWith('=')) {
+                            cell.raw = val;
+                            try {
+                                const result = evaluateFormula(val, cell);
+                                cell.value = result;
+                            } catch (e) {
+                                cell.value = '#ERROR';
+                            }
+                        } else {
+                            cell.raw = val;
+                            // try to parse number
+                            const num = parseFloat(val);
+                            cell.value = isNaN(num) ? val : num;
+                        }
+                        pushUndo({ type: 'cellEdit', row, col, old: { ...cell } });
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                        setStatus(`Edited cell ${colToLetter(col)}${row+1}`);
+                    }
+                    input.remove();
+                    state.isEditing = false;
+                    // Re-focus on grid
+                    grid.focus();
+                };
+
+                input.addEventListener('blur', () => finish(true));
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        finish(true);
+                        // Move down
+                        if (row + 1 < ROWS) selectCell(row + 1, col);
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        finish(false);
+                    } else if (e.key === 'Tab') {
+                        e.preventDefault();
+                        finish(true);
+                        if (e.shiftKey) {
+                            if (col > 0) selectCell(row, col - 1);
+                        } else {
+                            if (col + 1 < COLS) selectCell(row, col + 1);
+                        }
+                    }
+                });
+            }
+
+            // -------- AUTOFILL --------
+            let autofillData = null;
+
+            function initAutofill(e) {
+                if (state.selection.type !== 'cell' && state.selection.type !== 'range') return;
+                const active = state.activeCell;
+                const cell = getCell(active.row, active.col);
+                if (!cell) return;
+                autofillData = {
+                    startRow: state.selection.startRow,
+                    startCol: state.selection.startCol,
+                    endRow: state.selection.endRow,
+                    endCol: state.selection.endCol,
+                    value: cell.value,
+                    raw: cell.raw,
+                };
+                document.addEventListener('mousemove', onAutofillMove);
+                document.addEventListener('mouseup', onAutofillEnd);
+                setStatus('AutoFill: drag to fill cells');
+            }
+
+            function onAutofillMove(e) {
+                if (!autofillData) return;
+                // Find cell under mouse
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (!el) return;
+                const cellEl = el.closest('.cell');
+                if (!cellEl) return;
+                const row = parseInt(cellEl.dataset.row);
+                const col = parseInt(cellEl.dataset.col);
+                if (isNaN(row) || isNaN(col)) return;
+
+                // Highlight target range
+                const sR = Math.min(autofillData.startRow, row);
+                const eR = Math.max(autofillData.endRow, row);
+                const sC = Math.min(autofillData.startCol, col);
+                const eC = Math.max(autofillData.endCol, col);
+
+                // Show overlay
+                const topLeft = getCellPosition(sR, sC);
+                const bottomRight = getCellPosition(eR, eC);
+                if (topLeft && bottomRight) {
+                    const containerRect = tableContainer.getBoundingClientRect();
+                    const scrollLeft = tableWrapper.scrollLeft;
+                    const scrollTop = tableWrapper.scrollTop;
+                    selectionOverlay.style.left = (topLeft.left - containerRect.left + scrollLeft) + 'px';
+                    selectionOverlay.style.top = (topLeft.top - containerRect.top + scrollTop) + 'px';
+                    selectionOverlay.style.width = (bottomRight.right - topLeft.left) + 'px';
+                    selectionOverlay.style.height = (bottomRight.bottom - topLeft.top) + 'px';
+                    selectionOverlay.classList.add('visible');
+                    selectionOverlay.style.borderColor = 'rgba(249,171,0,0.5)';
+                    selectionOverlay.style.background = 'rgba(249,171,0,0.08)';
+                }
+
+                autofillData.targetRow = row;
+                autofillData.targetCol = col;
+            }
+
+            function onAutofillEnd(e) {
+                document.removeEventListener('mousemove', onAutofillMove);
+                document.removeEventListener('mouseup', onAutofillEnd);
+                if (autofillData && autofillData.targetRow !== undefined && autofillData.targetCol !== undefined) {
+                    // Apply fill
+                    const sR = Math.min(autofillData.startRow, autofillData.targetRow);
+                    const eR = Math.max(autofillData.endRow, autofillData.targetRow);
+                    const sC = Math.min(autofillData.startCol, autofillData.targetCol);
+                    const eC = Math.max(autofillData.endCol, autofillData.targetCol);
+
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            if (r >= autofillData.startRow && r <= autofillData.endRow &&
+                                c >= autofillData.startCol && c <= autofillData.endCol) continue;
+                            const cell = getCell(r, c);
+                            if (cell) {
+                                // Simple fill: copy value
+                                const src = getCell(autofillData.startRow, autofillData.startCol);
+                                if (src) {
+                                    cell.value = src.value;
+                                    cell.raw = src.raw;
+                                    cell.style = { ...src.style };
+                                    cell.format = src.format;
+                                }
+                            }
+                        }
+                    }
+                    pushUndo({ type: 'autofill', rows: sR, cols: sC });
+                    render();
+                    updateSmartView();
+                    updateFormulaBar();
+                    setStatus('AutoFill complete');
+                } else {
+                    setStatus('AutoFill cancelled');
+                }
+                selectionOverlay.classList.remove('visible');
+                selectionOverlay.style.borderColor = '';
+                selectionOverlay.style.background = '';
+                autofillData = null;
+            }
+
+            // -------- MAGIC FILL --------
+            function magicFill() {
+                const sel = state.selection;
+                if (sel.type !== 'range') {
+                    setStatus('Select a range with a pattern first');
+                    return;
+                }
+                // Simple magic fill: detect pattern in first column and fill down
+                const startRow = Math.min(sel.startRow, sel.endRow);
+                const endRow = Math.max(sel.startRow, sel.endRow);
+                const col = sel.startCol;
+
+                // Get values from first column
+                const values = [];
+                for (let r = startRow; r <= endRow; r++) {
+                    const cell = getCell(r, col);
+                    if (cell) values.push(cell.value);
+                }
+
+                // Try to detect pattern: numbers incrementing, text with numbers, etc.
+                if (values.length < 2) {
+                    setStatus('Need at least 2 cells to detect pattern');
+                    return;
+                }
+
+                // Check if all are numbers
+                const nums = values.map(v => parseFloat(v));
+                if (nums.every(n => !isNaN(n))) {
+                    const diff = nums[1] - nums[0];
+                    if (diff !== 0 && !isNaN(diff)) {
+                        // Fill down with increment
+                        for (let r = startRow + 2; r < ROWS; r++) {
+                            const cell = getCell(r, col);
+                            if (cell) {
+                                const newVal = (nums[0] || 0) + diff * (r - startRow);
+                                cell.value = newVal;
+                                cell.raw = String(newVal);
+                            }
+                        }
+                        pushUndo({ type: 'magicFill', row: startRow, col });
+                        render();
+                        updateSmartView();
+                        setStatus('Magic Fill complete');
+                        return;
+                    }
+                }
+
+                // Simple copy pattern
+                for (let r = startRow + 1; r < ROWS; r++) {
+                    const cell = getCell(r, col);
+                    if (cell) {
+                        const src = getCell(startRow + ((r - startRow) % (endRow - startRow + 1)), col);
+                        if (src) {
+                            cell.value = src.value;
+                            cell.raw = src.raw;
+                        }
+                    }
+                }
+                pushUndo({ type: 'magicFill', row: startRow, col });
+                render();
+                updateSmartView();
+                setStatus('Magic Fill complete (pattern copy)');
+            }
+
+            // -------- UNDO / REDO --------
+            function pushUndo(action) {
+                state.undoStack.push(action);
+                if (state.undoStack.length > state.maxUndo) state.undoStack.shift();
+                state.redoStack = [];
+                updateUndoRedoButtons();
+            }
+
+            function undo() {
+                if (state.undoStack.length === 0) return;
+                const action = state.undoStack.pop();
+                state.redoStack.push(action);
+                // Revert based on action type
+                if (action.type === 'cellEdit') {
+                    const cell = getCell(action.row, action.col);
+                    if (cell && action.old) {
+                        cell.value = action.old.value;
+                        cell.raw = action.old.raw;
+                        cell.style = action.old.style || {};
+                        cell.format = action.old.format || 'general';
+                    }
+                } else if (action.type === 'autofill' || action.type === 'magicFill') {
+                    // Re-render everything
+                    render();
+                }
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateUndoRedoButtons();
+                setStatus('Undo');
+            }
+
+            function redo() {
+                if (state.redoStack.length === 0) return;
+                const action = state.redoStack.pop();
+                state.undoStack.push(action);
+                // Re-apply
+                if (action.type === 'cellEdit') {
+                    const cell = getCell(action.row, action.col);
+                    if (cell && action.old) {
+                        // We'd need the new value, but we don't store it. Just re-render.
+                        render();
+                    }
+                }
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                updateUndoRedoButtons();
+                setStatus('Redo');
+            }
+
+            function updateUndoRedoButtons() {
+                document.getElementById('btnUndo').style.opacity = state.undoStack.length > 0 ? '1' : '0.4';
+                document.getElementById('btnRedo').style.opacity = state.redoStack.length > 0 ? '1' : '0.4';
+            }
+
+            // -------- COPY / PASTE / CUT --------
+            function copySelection() {
+                const sel = state.selection;
+                if (sel.type === 'none') return;
+                const data = getSelectionData();
+                if (data) {
+                    state.clipboard = { data, cut: false };
+                    setStatus('Copied');
+                }
+            }
+
+            function cutSelection() {
+                const sel = state.selection;
+                if (sel.type === 'none') return;
+                const data = getSelectionData();
+                if (data) {
+                    state.clipboard = { data, cut: true };
+                    // Clear selected cells
+                    clearSelectionData();
+                    setStatus('Cut');
+                }
+            }
+
+            function pasteClipboard() {
+                if (!state.clipboard) return;
+                const { data, cut } = state.clipboard;
+                const active = state.activeCell;
+                const rows = data.length;
+                const cols = data[0] ? data[0].length : 0;
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const targetR = active.row + r;
+                        const targetC = active.col + c;
+                        if (targetR >= ROWS || targetC >= COLS) continue;
+                        const cell = getCell(targetR, targetC);
+                        if (cell && data[r] && data[r][c] !== undefined) {
+                            const src = data[r][c];
+                            cell.value = src.value;
+                            cell.raw = src.raw;
+                            cell.style = { ...src.style };
+                            cell.format = src.format;
+                        }
+                    }
+                }
+
+                if (cut) {
+                    // Clear source data (we stored it)
+                    // For simplicity, we clear the original selection range
+                    const sel = state.selection;
+                    if (sel.type === 'range' || sel.type === 'cell') {
+                        const sR = Math.min(sel.startRow, sel.endRow);
+                        const eR = Math.max(sel.startRow, sel.endRow);
+                        const sC = Math.min(sel.startCol, sel.endCol);
+                        const eC = Math.max(sel.startCol, sel.endCol);
+                        for (let r = sR; r <= eR; r++) {
+                            for (let c = sC; c <= eC; c++) {
+                                const cell = getCell(r, c);
+                                if (cell) {
+                                    cell.value = '';
+                                    cell.raw = '';
+                                    cell.style = {};
+                                    cell.format = 'general';
+                                }
+                            }
+                        }
+                    }
+                    state.clipboard = null;
+                }
+
+                pushUndo({ type: 'paste' });
+                render();
+                updateSmartView();
+                updateFormulaBar();
+                setStatus('Pasted');
+            }
+
+            function getSelectionData() {
+                const sel = state.selection;
+                let rows = [],
+                    cols = [];
+                if (sel.type === 'cell') {
+                    rows = [sel.activeRow];
+                    cols = [sel.activeCol];
+                } else if (sel.type === 'range') {
+                    const sR = Math.min(sel.startRow, sel.endRow);
+                    const eR = Math.max(sel.startRow, sel.endRow);
+                    const sC = Math.min(sel.startCol, sel.endCol);
+                    const eC = Math.max(sel.startCol, sel.endCol);
+                    for (let r = sR; r <= eR; r++) rows.push(r);
+                    for (let c = sC; c <= eC; c++) cols.push(c);
+                } else if (sel.type === 'row') {
+                    const r = sel.activeRow;
+                    rows = [r];
+                    for (let c = 0; c < COLS; c++) cols.push(c);
+                } else if (sel.type === 'col') {
+                    const c = sel.activeCol;
+                    cols = [c];
+                    for (let r = 0; r < ROWS; r++) rows.push(r);
+                } else if (sel.type === 'table') {
+                    for (let r = 0; r < ROWS; r++) rows.push(r);
+                    for (let c = 0; c < COLS; c++) cols.push(c);
+                }
+                const data = [];
+                for (let r of rows) {
+                    const rowData = [];
+                    for (let c of cols) {
+                        const cell = getCell(r, c);
+                        rowData.push(cell ? { ...cell } : { value: '', raw: '', style: {}, format: 'general' });
+                    }
+                    data.push(rowData);
+                }
+                return data;
+            }
+
+            function clearSelectionData() {
+                const sel = state.selection;
+                if (sel.type === 'cell') {
+                    const cell = getCell(sel.activeRow, sel.activeCol);
+                    if (cell) { cell.value = '';
+                        cell.raw = '';
+                        cell.style = {};
+                        cell.format = 'general'; }
+                } else if (sel.type === 'range') {
+                    const sR = Math.min(sel.startRow, sel.endRow);
+                    const eR = Math.max(sel.startRow, sel.endRow);
+                    const sC = Math.min(sel.startCol, sel.endCol);
+                    const eC = Math.max(sel.startCol, sel.endCol);
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            const cell = getCell(r, c);
+                            if (cell) { cell.value = '';
+                                cell.raw = '';
+                                cell.style = {};
+                                cell.format = 'general'; }
+                        }
+                    }
+                } else if (sel.type === 'row') {
+                    const r = sel.activeRow;
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = getCell(r, c);
+                        if (cell) { cell.value = '';
+                            cell.raw = '';
+                            cell.style = {};
+                            cell.format = 'general'; }
+                    }
+                } else if (sel.type === 'col') {
+                    const c = sel.activeCol;
+                    for (let r = 0; r < ROWS; r++) {
+                        const cell = getCell(r, c);
+                        if (cell) { cell.value = '';
+                            cell.raw = '';
+                            cell.style = {};
+                            cell.format = 'general'; }
+                    }
+                } else if (sel.type === 'table') {
+                    for (let r = 0; r < ROWS; r++) {
+                        for (let c = 0; c < COLS; c++) {
+                            const cell = getCell(r, c);
+                            if (cell) { cell.value = '';
+                                cell.raw = '';
+                                cell.style = {};
+                                cell.format = 'general'; }
+                        }
+                    }
+                }
+                render();
+                updateSmartView();
+                updateFormulaBar();
+            }
+
+            // -------- FORMATTING --------
+            function applyFormat(format) {
+                const sel = state.selection;
+                const cells = getSelectedCells();
+                for (const { row, col } of cells) {
+                    const cell = getCell(row, col);
+                    if (cell) {
+                        cell.format = format;
+                        if (format === 'currency') {
+                            const num = parseFloat(cell.value);
+                            if (!isNaN(num)) cell.value = num;
+                        } else if (format === 'percent') {
+                            const num = parseFloat(cell.value);
+                            if (!isNaN(num)) cell.value = num;
+                        } else if (format === 'date') {
+                            // Try to parse as date
+                            if (cell.value && !isNaN(Date.parse(cell.value))) {
+                                // keep as is
+                            }
+                        }
+                    }
+                }
+                pushUndo({ type: 'format', format });
+                render();
+                updateSmartView();
+                setStatus(`Applied ${format} format`);
+            }
+
+            function applyStyle(styleObj) {
+                const cells = getSelectedCells();
+                for (const { row, col } of cells) {
+                    const cell = getCell(row, col);
+                    if (cell) {
+                        cell.style = { ...cell.style, ...styleObj };
+                    }
+                }
+                pushUndo({ type: 'style', style: styleObj });
+                render();
+                updateSmartView();
+                setStatus('Applied style');
+            }
+
+            function getSelectedCells() {
+                const sel = state.selection;
+                const cells = [];
+                if (sel.type === 'cell') {
+                    cells.push({ row: sel.activeRow, col: sel.activeCol });
+                } else if (sel.type === 'range') {
+                    const sR = Math.min(sel.startRow, sel.endRow);
+                    const eR = Math.max(sel.startRow, sel.endRow);
+                    const sC = Math.min(sel.startCol, sel.endCol);
+                    const eC = Math.max(sel.startCol, sel.endCol);
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            cells.push({ row: r, col: c });
+                        }
+                    }
+                } else if (sel.type === 'row') {
+                    const r = sel.activeRow;
+                    for (let c = 0; c < COLS; c++) cells.push({ row: r, col: c });
+                } else if (sel.type === 'col') {
+                    const c = sel.activeCol;
+                    for (let r = 0; r < ROWS; r++) cells.push({ row: r, col: c });
+                } else if (sel.type === 'table') {
+                    for (let r = 0; r < ROWS; r++) {
+                        for (let c = 0; c < COLS; c++) cells.push({ row: r, col: c });
+                    }
+                }
+                return cells;
+            }
+
+            // -------- ROW / COLUMN OPERATIONS --------
+            function insertRowAbove() {
+                const row = state.activeCell.row;
+                if (row < 0) return;
+                state.cells.splice(row, 0, []);
+                state.rowHeights.splice(row, 0, DEFAULT_ROW_HEIGHT);
+                for (let c = 0; c < COLS; c++) {
+                    state.cells[row][c] = { value: '', raw: '', style: {}, format: 'general' };
+                }
+                // Shift existing rows
+                pushUndo({ type: 'insertRow', row });
+                render();
+                updateSmartView();
+                setStatus(`Inserted row ${row+1}`);
+            }
+
+            function insertRowBelow() {
+                const row = state.activeCell.row + 1;
+                if (row > ROWS) return;
+                state.cells.splice(row, 0, []);
+                state.rowHeights.splice(row, 0, DEFAULT_ROW_HEIGHT);
+                for (let c = 0; c < COLS; c++) {
+                    state.cells[row][c] = { value: '', raw: '', style: {}, format: 'general' };
+                }
+                pushUndo({ type: 'insertRow', row });
+                render();
+                updateSmartView();
+                setStatus(`Inserted row ${row+1}`);
+            }
+
+            function deleteRow() {
+                const row = state.activeCell.row;
+                if (row < 0 || row >= ROWS) return;
+                state.cells.splice(row, 1);
+                state.rowHeights.splice(row, 1);
+                // Add a new empty row at the end
+                state.cells.push([]);
+                state.rowHeights.push(DEFAULT_ROW_HEIGHT);
+                for (let c = 0; c < COLS; c++) {
+                    state.cells[ROWS - 1][c] = { value: '', raw: '', style: {}, format: 'general' };
+                }
+                pushUndo({ type: 'deleteRow', row });
+                render();
+                updateSmartView();
+                setStatus(`Deleted row ${row+1}`);
+            }
+
+            function insertColLeft() {
+                const col = state.activeCell.col;
+                if (col < 0) return;
+                for (let r = 0; r < ROWS; r++) {
+                    state.cells[r].splice(col, 0, { value: '', raw: '', style: {}, format: 'general' });
+                }
+                state.colWidths.splice(col, 0, DEFAULT_COL_WIDTH);
+                pushUndo({ type: 'insertCol', col });
+                render();
+                updateSmartView();
+                setStatus(`Inserted column ${colToLetter(col)}`);
+            }
+
+            function insertColRight() {
+                const col = state.activeCell.col + 1;
+                if (col > COLS) return;
+                for (let r = 0; r < ROWS; r++) {
+                    state.cells[r].splice(col, 0, { value: '', raw: '', style: {}, format: 'general' });
+                }
+                state.colWidths.splice(col, 0, DEFAULT_COL_WIDTH);
+                pushUndo({ type: 'insertCol', col });
+                render();
+                updateSmartView();
+                setStatus(`Inserted column ${colToLetter(col)}`);
+            }
+
+            function deleteCol() {
+                const col = state.activeCell.col;
+                if (col < 0 || col >= COLS) return;
+                for (let r = 0; r < ROWS; r++) {
+                    state.cells[r].splice(col, 1);
+                }
+                state.colWidths.splice(col, 1);
+                // Add a new empty column at the end
+                for (let r = 0; r < ROWS; r++) {
+                    state.cells[r].push({ value: '', raw: '', style: {}, format: 'general' });
+                }
+                state.colWidths.push(DEFAULT_COL_WIDTH);
+                pushUndo({ type: 'deleteCol', col });
+                render();
+                updateSmartView();
+                setStatus(`Deleted column ${colToLetter(col)}`);
+            }
+
+            // -------- TABLE MOVE --------
+            let moveData = null;
+
+            function startTableMove(e) {
+                e.preventDefault();
+                if (state.selection.type !== 'table') {
+                    selectAll();
+                }
+                moveData = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startScrollLeft: tableWrapper.scrollLeft,
+                    startScrollTop: tableWrapper.scrollTop,
+                };
+                document.addEventListener('mousemove', onTableMove);
+                document.addEventListener('mouseup', endTableMove);
+                handleTL.style.cursor = 'grabbing';
+                setStatus('Drag to move table');
+            }
+
+            function onTableMove(e) {
+                if (!moveData) return;
+                const dx = e.clientX - moveData.startX;
+                const dy = e.clientY - moveData.startY;
+                tableWrapper.scrollLeft = moveData.startScrollLeft - dx;
+                tableWrapper.scrollTop = moveData.startScrollTop - dy;
+                // Update handles position
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function endTableMove(e) {
+                document.removeEventListener('mousemove', onTableMove);
+                document.removeEventListener('mouseup', endTableMove);
+                handleTL.style.cursor = 'grab';
+                moveData = null;
+                setStatus('Table moved');
+            }
+
+            // -------- COLUMN / ROW BULK OPERATIONS (handles) --------
+            let handleActionData = null;
+
+            function startColumnHandle(e) {
+                e.preventDefault();
+                // Show a mini menu or toggle behavior
+                const current = handleTR.querySelector('.icon').textContent;
+                if (current === '⊕') {
+                    // Add column to the right
+                    const col = state.activeCell.col;
+                    if (col < COLS - 1) {
+                        insertColRight();
+                    } else {
+                        // Add at end
+                        insertColRight();
+                    }
+                    handleTR.querySelector('.icon').textContent = '⊖';
+                    setTimeout(() => {
+                        handleTR.querySelector('.icon').textContent = '⊕';
+                    }, 800);
+                    setStatus('Added column');
+                } else {
+                    // Delete column
+                    deleteCol();
+                    handleTR.querySelector('.icon').textContent = '⊕';
+                    setStatus('Deleted column');
+                }
+            }
+
+            function startRowHandle(e) {
+                e.preventDefault();
+                const current = handleBL.querySelector('.icon').textContent;
+                if (current === '⊕') {
+                    insertRowBelow();
+                    handleBL.querySelector('.icon').textContent = '⊖';
+                    setTimeout(() => {
+                        handleBL.querySelector('.icon').textContent = '⊕';
+                    }, 800);
+                    setStatus('Added row');
+                } else {
+                    deleteRow();
+                    handleBL.querySelector('.icon').textContent = '⊕';
+                    setStatus('Deleted row');
+                }
+            }
+
+            // -------- RESIZE TABLE (bottom-right handle) --------
+            let resizeTableData = null;
+
+            function startResizeTable(e) {
+                e.preventDefault();
+                resizeTableData = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startCols: COLS,
+                    startRows: ROWS,
+                    startWidth: state.colWidths.reduce((a, b) => a + b, 0),
+                    startHeight: state.rowHeights.reduce((a, b) => a + b, 0),
+                    shift: e.shiftKey,
+                };
+                document.addEventListener('mousemove', onResizeTable);
+                document.addEventListener('mouseup', endResizeTable);
+                setStatus('Resize table');
+            }
+
+            function onResizeTable(e) {
+                if (!resizeTableData) return;
+                const dx = e.clientX - resizeTableData.startX;
+                const dy = e.clientY - resizeTableData.startY;
+
+                // Determine new row/col count based on distance
+                const colDelta = Math.round(dx / 20);
+                const rowDelta = Math.round(dy / 20);
+
+                let newCols = Math.max(3, resizeTableData.startCols + colDelta);
+                let newRows = Math.max(3, resizeTableData.startRows + rowDelta);
+
+                if (resizeTableData.shift) {
+                    // Proportional: keep aspect ratio
+                    const ratio = resizeTableData.startCols / resizeTableData.startRows;
+                    const avgDelta = Math.round((colDelta + rowDelta) / 2);
+                    newCols = Math.max(3, resizeTableData.startCols + avgDelta);
+                    newRows = Math.max(3, Math.round(newCols / ratio));
+                }
+
+                // Clamp
+                newCols = Math.min(52, newCols);
+                newRows = Math.min(200, newRows);
+
+                // Resize the table
+                resizeTableTo(newRows, newCols);
+                render();
+                updateHandles();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+            }
+
+            function endResizeTable(e) {
+                document.removeEventListener('mousemove', onResizeTable);
+                document.removeEventListener('mouseup', endResizeTable);
+                if (resizeTableData) {
+                    pushUndo({ type: 'resizeTable', rows: ROWS, cols: COLS });
+                    resizeTableData = null;
+                    setStatus('Table resized');
+                }
+            }
+
+            function resizeTableTo(newRows, newCols) {
+                // Adjust rows
+                while (state.cells.length < newRows) {
+                    const r = state.cells.length;
+                    state.cells.push([]);
+                    state.rowHeights.push(DEFAULT_ROW_HEIGHT);
+                    for (let c = 0; c < state.cells[0].length; c++) {
+                        state.cells[r][c] = { value: '', raw: '', style: {}, format: 'general' };
+                    }
+                }
+                while (state.cells.length > newRows) {
+                    state.cells.pop();
+                    state.rowHeights.pop();
+                }
+
+                // Adjust columns
+                for (let r = 0; r < state.cells.length; r++) {
+                    while (state.cells[r].length < newCols) {
+                        state.cells[r].push({ value: '', raw: '', style: {}, format: 'general' });
+                    }
+                    while (state.cells[r].length > newCols) {
+                        state.cells[r].pop();
+                    }
+                }
+                while (state.colWidths.length < newCols) {
+                    state.colWidths.push(DEFAULT_COL_WIDTH);
+                }
+                while (state.colWidths.length > newCols) {
+                    state.colWidths.pop();
+                }
+            }
+
+            // -------- KEYBOARD SHORTCUTS --------
+            function handleKeydown(e) {
+                const ctrl = e.ctrlKey || e.metaKey;
+                const shift = e.shiftKey;
+                const alt = e.altKey;
+
+                // If editing, handle specially
+                if (state.isEditing) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Already handled by input
+                        return;
+                    }
+                    if (e.key === 'Escape') {
+                        // Will be handled by input
+                        return;
+                    }
+                    // Ctrl+Enter to confirm and stay
+                    if (ctrl && e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = document.querySelector('.cell-input');
+                        if (input) {
+                            input.blur();
+                        }
+                        return;
+                    }
+                    // Allow normal typing
+                    return;
+                }
+
+                // ----- NAVIGATION -----
+                const active = state.activeCell;
+                let newRow = active.row;
+                let newCol = active.col;
+
+                if (e.key === 'ArrowUp') { e.preventDefault();
+                    newRow = Math.max(0, active.row - 1); } else if (e.key === 'ArrowDown') { e.preventDefault();
+                    newRow = Math.min(ROWS - 1, active.row + 1); } else if (e.key === 'ArrowLeft') { e.preventDefault();
+                    newCol = Math.max(0, active.col - 1); } else if (e.key === 'ArrowRight') { e.preventDefault();
+                    newCol = Math.min(COLS - 1, active.col + 1); } else if (e.key === 'Home') {
+                    if (ctrl) { e.preventDefault();
+                        newRow = 0;
+                        newCol = 0; } else { e.preventDefault();
+                        newCol = 0; }
+                } else if (e.key === 'End') {
+                    if (ctrl) { e.preventDefault();
+                        newRow = ROWS - 1;
+                        newCol = COLS - 1; } else { e.preventDefault();
+                        newCol = COLS - 1; }
+                } else if (e.key === 'PageUp') { e.preventDefault();
+                    newRow = Math.max(0, active.row - 20); } else if (e.key === 'PageDown') { e.preventDefault();
+                    newRow = Math.min(ROWS - 1, active.row + 20); } else if (alt && e.key === 'PageUp') { e
+                        .preventDefault();
+                    newCol = Math.max(0, active.col - 10); } else if (alt && e.key === 'PageDown') { e.preventDefault();
+                    newCol = Math.min(COLS - 1, active.col + 10); }
+
+                if (newRow !== active.row || newCol !== active.col) {
+                    if (shift) {
+                        // Extend selection
+                        const sel = state.selection;
+                        if (sel.type === 'cell' || sel.type === 'range') {
+                            selectRange(sel.startRow, sel.startCol, newRow, newCol);
+                        } else {
+                            selectCell(newRow, newCol, false);
+                        }
+                    } else {
+                        selectCell(newRow, newCol, false);
+                    }
+                    return;
+                }
+
+                // ----- SELECTION SHORTCUTS -----
+                if (shift && e.key === ' ') {
+                    e.preventDefault();
+                    selectRow(active.row);
+                    return;
+                }
+                if (ctrl && e.key === ' ') {
+                    e.preventDefault();
+                    selectCol(active.col);
+                    return;
+                }
+                if (ctrl && e.key === 'a') {
+                    e.preventDefault();
+                    selectAll();
+                    return;
+                }
+                if (ctrl && shift && e.key === '*') {
+                    e.preventDefault();
+                    // Select current region
+                    selectAll();
+                    return;
+                }
+
+                // ----- EDITING -----
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    startEditing(active.row, active.col);
+                    return;
+                }
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    clearSelectionData();
+                    return;
+                }
+
+                // ----- COPY / PASTE / CUT -----
+                if (ctrl && e.key === 'c') { e.preventDefault();
+                    copySelection(); return; }
+                if (ctrl && e.key === 'x') { e.preventDefault();
+                    cutSelection(); return; }
+                if (ctrl && e.key === 'v') { e.preventDefault();
+                    pasteClipboard(); return; }
+                if (ctrl && alt && e.key === 'v') { e.preventDefault(); /* Paste special */ return; }
+
+                // ----- UNDO / REDO -----
+                if (ctrl && e.key === 'z') { e.preventDefault();
+                    undo(); return; }
+                if (ctrl && e.key === 'y') { e.preventDefault();
+                    redo(); return; }
+
+                // ----- FORMATTING -----
+                if (ctrl && shift && e.key === '~') { e.preventDefault();
+                    applyFormat('general'); return; }
+                if (ctrl && shift && e.key === '$') { e.preventDefault();
+                    applyFormat('currency'); return; }
+                if (ctrl && shift && e.key === '%') { e.preventDefault();
+                    applyFormat('percent'); return; }
+                if (ctrl && shift && e.key === '#') { e.preventDefault();
+                    applyFormat('date'); return; }
+                if (ctrl && shift && e.key === '@') { e.preventDefault();
+                    applyFormat('time'); return; }
+                if (ctrl && shift && e.key === '^') { e.preventDefault();
+                    applyFormat('scientific'); return; }
+
+                // ----- BOLD / ITALIC / UNDERLINE -----
+                if (ctrl && e.key === 'b') { e.preventDefault();
+                    applyStyle({ bold: !getCurrentStyle('bold') }); return; }
+                if (ctrl && e.key === 'i') { e.preventDefault();
+                    applyStyle({ italic: !getCurrentStyle('italic') }); return; }
+                if (ctrl && e.key === 'u') { e.preventDefault();
+                    applyStyle({ underline: !getCurrentStyle('underline') }); return; }
+
+                // ----- AUTO SUM -----
+                if (alt && e.key === '=') { e.preventDefault();
+                    insertAutoSum(); return; }
+
+                // ----- MAGIC FILL -----
+                if (ctrl && e.key === 'e') { e.preventDefault();
+                    magicFill(); return; }
+
+                // ----- INSERT FUNCTION -----
+                if (shift && e.key === 'F3') { e.preventDefault();
+                    setStatus('Insert Function dialog (simulated)'); return; }
+
+                // ----- F4: toggle absolute refs -----
+                if (e.key === 'F4') {
+                    e.preventDefault();
+                    // Toggle $ on formula
+                    const cell = getCell(active.row, active.col);
+                    if (cell && cell.raw && cell.raw.startsWith('=')) {
+                        // Simple toggle: add/remove $ before column letters
+                        let formula = cell.raw;
+                        const refs = formula.match(/\b([A-Z]+)(\d+)\b/g);
+                        if (refs) {
+                            for (const ref of refs) {
+                                const parts = ref.match(/([A-Z]+)(\d+)/);
+                                if (parts) {
+                                    const colLetter = parts[1];
+                                    const rowNum = parts[2];
+                                    const absRef = '$' + colLetter + '$' + rowNum;
+                                    if (formula.includes(absRef)) {
+                                        formula = formula.replace(absRef, colLetter + rowNum);
+                                    } else {
+                                        formula = formula.replace(ref, absRef);
+                                    }
+                                }
+                            }
+                            cell.raw = formula;
+                            render();
+                            updateFormulaBar();
+                            setStatus('Toggled absolute references');
+                        }
+                    }
+                    return;
+                }
+
+                // ----- FILL DOWN (Ctrl+D) -----
+                if (ctrl && e.key === 'd') {
+                    e.preventDefault();
+                    fillDown();
+                    return;
+                }
+
+                // ----- DATE / TIME -----
+                if (ctrl && e.key === ';') {
+                    e.preventDefault();
+                    const now = new Date();
+                    const cell = getCell(active.row, active.col);
+                    if (cell) {
+                        cell.value = now.toLocaleDateString();
+                        cell.raw = now.toLocaleDateString();
+                        cell.format = 'date';
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                    }
+                    return;
+                }
+                if (ctrl && shift && e.key === ':') {
+                    e.preventDefault();
+                    const now = new Date();
+                    const cell = getCell(active.row, active.col);
+                    if (cell) {
+                        cell.value = now.toLocaleTimeString();
+                        cell.raw = now.toLocaleTimeString();
+                        cell.format = 'time';
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                    }
+                    return;
+                }
+
+                // ----- LINE BREAK (Alt+Enter) -----
+                if (alt && e.key === 'Enter') {
+                    e.preventDefault();
+                    const cell = getCell(active.row, active.col);
+                    if (cell) {
+                        cell.raw = (cell.raw || '') + '\n';
+                        cell.value = (cell.value || '') + '\n';
+                        render();
+                        updateFormulaBar();
+                    }
+                    return;
+                }
+
+                // ----- CALCULATE (Shift+F9) -----
+                if (shift && e.key === 'F9') {
+                    e.preventDefault();
+                    render();
+                    updateSmartView();
+                    setStatus('Recalculated');
+                    return;
+                }
+
+                // ----- TYPE TO EDIT -----
+                if (e.key.length === 1 && !ctrl && !alt && !e.key.match(/[^a-zA-Z0-9 ]/)) {
+                    // Start typing to edit
+                    startEditing(active.row, active.col);
+                    // After a short delay, insert the character
+                    setTimeout(() => {
+                        const input = document.querySelector('.cell-input');
+                        if (input) {
+                            input.value = e.key;
+                            input.selectionStart = 1;
+                            input.selectionEnd = 1;
+                        }
+                    }, 10);
+                    return;
+                }
+            }
+
+            // -------- HELPERS FOR KEYBOARD --------
+            function getCurrentStyle(prop) {
+                const cell = getCell(state.activeCell.row, state.activeCell.col);
+                if (cell && cell.style) return cell.style[prop] || false;
+                return false;
+            }
+
+            function fillDown() {
+                const active = state.activeCell;
+                const cell = getCell(active.row, active.col);
+                if (!cell) return;
+                // Copy from cell above
+                if (active.row > 0) {
+                    const above = getCell(active.row - 1, active.col);
+                    if (above) {
+                        cell.value = above.value;
+                        cell.raw = above.raw;
+                        cell.style = { ...above.style };
+                        cell.format = above.format;
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                        setStatus('Filled down');
+                    }
+                }
+            }
+
+            function insertAutoSum() {
+                const active = state.activeCell;
+                const col = active.col;
+                // Find range above with numbers
+                let startRow = active.row - 1;
+                while (startRow >= 0) {
+                    const cell = getCell(startRow, col);
+                    if (!cell || cell.value === '' || cell.value === null || cell.value === undefined) break;
+                    const num = parseFloat(cell.value);
+                    if (isNaN(num)) break;
+                    startRow--;
+                }
+                startRow++;
+                if (startRow < active.row) {
+                    const range = colToLetter(col) + (startRow + 1) + ':' + colToLetter(col) + (active.row);
+                    const cell = getCell(active.row, col);
+                    if (cell) {
+                        cell.raw = '=SUM(' + range + ')';
+                        try {
+                            const result = evaluateFormula(cell.raw, cell);
+                            cell.value = result;
+                        } catch (e) {
+                            cell.value = '#ERROR';
+                        }
+                        render();
+                        updateSmartView();
+                        updateFormulaBar();
+                        setStatus('AutoSum inserted');
+                    }
+                }
+            }
+
+            // -------- BIND EVENTS --------
+            function bindEvents() {
+                // Global
+                document.addEventListener('keydown', handleKeydown);
+
+                // Mouse up globally
+                document.addEventListener('mouseup', () => {
+                    if (isMouseDown) {
+                        isMouseDown = false;
+                        state.isSelecting = false;
+                        state.selectionStart = null;
+                    }
+                });
+
+                // Handles
+                handleTL.addEventListener('mousedown', startTableMove);
+                handleTL.addEventListener('mouseenter', () => showTooltip('Move table: drag to reposition'));
+                handleTL.addEventListener('mouseleave', hideTooltip);
+
+                handleTR.addEventListener('mousedown', startColumnHandle);
+                handleTR.addEventListener('mouseenter', () => showTooltip('Add/delete columns: click to toggle'));
+                handleTR.addEventListener('mouseleave', hideTooltip);
+                // Toggle icon on hover
+                handleTR.addEventListener('mouseenter', () => {
+                    const icon = handleTR.querySelector('.icon');
+                    if (icon.textContent === '⊕') icon.textContent = '⊖';
+                });
+                handleTR.addEventListener('mouseleave', () => {
+                    const icon = handleTR.querySelector('.icon');
+                    if (icon.textContent === '⊖') icon.textContent = '⊕';
+                });
+
+                handleBL.addEventListener('mousedown', startRowHandle);
+                handleBL.addEventListener('mouseenter', () => showTooltip('Add/delete rows: click to toggle'));
+                handleBL.addEventListener('mouseleave', hideTooltip);
+                handleBL.addEventListener('mouseenter', () => {
+                    const icon = handleBL.querySelector('.icon');
+                    if (icon.textContent === '⊕') icon.textContent = '⊖';
+                });
+                handleBL.addEventListener('mouseleave', () => {
+                    const icon = handleBL.querySelector('.icon');
+                    if (icon.textContent === '⊖') icon.textContent = '⊕';
+                });
+
+                handleBR.addEventListener('mousedown', startResizeTable);
+                handleBR.addEventListener('mouseenter', () => showTooltip('Resize table: drag diagonally (Shift=proportional)'));
+                handleBR.addEventListener('mouseleave', hideTooltip);
+
+                // AutoFill handle
+                autofillHandle.addEventListener('mousedown', initAutofill);
+
+                // Formula bar
+                formulaInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = formulaInput.value;
+                        const active = state.activeCell;
+                        const cell = getCell(active.row, active.col);
+                        if (cell) {
+                            if (val.startsWith('=')) {
+                                cell.raw = val;
+                                try {
+                                    const result = evaluateFormula(val, cell);
+                                    cell.value = result;
+                                } catch (err) {
+                                    cell.value = '#ERROR';
+                                }
+                            } else {
+                                cell.raw = val;
+                                const num = parseFloat(val);
+                                cell.value = isNaN(num) ? val : num;
+                            }
+                            pushUndo({ type: 'cellEdit', row: active.row, col: active.col, old: { ...cell } });
+                            render();
+                            updateSmartView();
+                            updateFormulaBar();
+                            setStatus('Formula applied');
+                        }
+                    }
+                });
+
+                // Toolbar buttons
+                document.getElementById('btnUndo').addEventListener('click', undo);
+                document.getElementById('btnRedo').addEventListener('click', redo);
+                document.getElementById('btnBold').addEventListener('click', () => applyStyle({ bold: !getCurrentStyle(
+                    'bold') }));
+                document.getElementById('btnItalic').addEventListener('click', () => applyStyle({ italic: !getCurrentStyle(
+                    'italic') }));
+                document.getElementById('btnUnderline').addEventListener('click', () => applyStyle({ underline: !
+                        getCurrentStyle('underline') }));
+                document.getElementById('fontSizeSelect').addEventListener('change', (e) => {
+                    applyStyle({ fontSize: parseInt(e.target.value) });
+                });
+                document.getElementById('btnFormatGeneral').addEventListener('click', () => applyFormat('general'));
+                document.getElementById('btnFormatCurrency').addEventListener('click', () => applyFormat('currency'));
+                document.getElementById('btnFormatPercent').addEventListener('click', () => applyFormat('percent'));
+                document.getElementById('btnFormatDate').addEventListener('click', () => applyFormat('date'));
+                document.getElementById('btnAutoSum').addEventListener('click', insertAutoSum);
+                document.getElementById('btnInsertFunction').addEventListener('click', () => setStatus(
+                    'Function dialog (simulated)'));
+                document.getElementById('btnMagicFill').addEventListener('click', magicFill);
+
+                // Context menu
+                grid.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const el = e.target.closest('.cell');
+                    if (el) {
+                        const row = parseInt(el.dataset.row);
+                        const col = parseInt(el.dataset.col);
+                        if (!isNaN(row) && !isNaN(col)) {
+                            selectCell(row, col, false);
+                        }
+                    }
+                    showContextMenu(e.clientX, e.clientY);
+                });
+
+                // Context menu actions
+                document.querySelectorAll('#contextMenu .item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const action = item.dataset.action;
+                        switch (action) {
+                            case 'copy':
+                                copySelection();
+                                break;
+                            case 'paste':
+                                pasteClipboard();
+                                break;
+                            case 'cut':
+                                cutSelection();
+                                break;
+                            case 'insert-row-above':
+                                insertRowAbove();
+                                break;
+                            case 'insert-row-below':
+                                insertRowBelow();
+                                break;
+                            case 'insert-col-left':
+                                insertColLeft();
+                                break;
+                            case 'insert-col-right':
+                                insertColRight();
+                                break;
+                            case 'delete-row':
+                                deleteRow();
+                                break;
+                            case 'delete-col':
+                                deleteCol();
+                                break;
+                            case 'clear':
+                                clearSelectionData();
+                                break;
+                        }
+                        hideContextMenu();
+                    });
+                });
+
+                // Click outside to hide context menu
+                document.addEventListener('click', () => hideContextMenu());
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    updateHandles();
+                    updateAutofillHandle();
+                    updateSelectionOverlay();
+                });
+
+                // Scroll
+                tableWrapper.addEventListener('scroll', () => {
+                    updateHandles();
+                    updateAutofillHandle();
+                    updateSelectionOverlay();
+                });
+
+                // Menu items (simple)
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const menu = item.dataset.menu;
+                        if (menu === 'file') setStatus('File menu');
+                        else if (menu === 'edit') setStatus('Edit menu');
+                        else if (menu === 'view') setStatus('View menu');
+                        else if (menu === 'table') setStatus('Table menu');
+                        else if (menu === 'format') setStatus('Format menu');
+                    });
+                });
+            }
+
+            // -------- TOOLTIP --------
+            function showTooltip(text) {
+                const el = document.getElementById('tooltip');
+                el.textContent = text;
+                el.classList.add('visible');
+                // Position near cursor
+                el.style.left = (event?.clientX || 0) + 12 + 'px';
+                el.style.top = (event?.clientY || 0) - 10 + 'px';
+            }
+
+            function hideTooltip() {
+                document.getElementById('tooltip').classList.remove('visible');
+            }
+
+            // -------- CONTEXT MENU --------
+            function showContextMenu(x, y) {
+                const menu = document.getElementById('contextMenu');
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.classList.add('open');
+            }
+
+            function hideContextMenu() {
+                document.getElementById('contextMenu').classList.remove('open');
+            }
+
+            // -------- STATUS --------
+            function setStatus(msg) {
+                statusText.textContent = msg;
+                setTimeout(() => {
+                    if (statusText.textContent === msg) {
+                        statusText.textContent = 'Ready';
+                    }
+                }, 3000);
+            }
+
+            // -------- INIT --------
+            init();
+
+            // Expose for debugging
+            window.__state = state;
+            window.__render = render;
+            window.__undo = undo;
+            window.__redo = redo;
+
+            console.log('📊 Excel App loaded!');
+            console.log('Keyboard shortcuts: Ctrl+C/V/X, Ctrl+Z/Y, Ctrl+B/I/U, Ctrl+A, etc.');
+            console.log('Click corner handles to manage table structure.');
+
+        })();
+    </script>
+</body>
+</html>
