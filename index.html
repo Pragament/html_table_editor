@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GridQuest: Kids Spreadsheet Lab</title>
+    <!-- SheetJS for XLSX Excel Support -->
+    <script src="xlsx.full.min.js"></script>
     <!-- Modern Kid-Friendly Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1251,8 +1253,11 @@
                     <div class="menu-dropdown" id="menu-dropdown-file">
                         <div class="item" onclick="newSpreadsheet()">New Spreadsheet <span class="shortcut">Ctrl+N</span></div>
                         <div class="divider"></div>
-                        <div class="item" onclick="saveSpreadsheetToFile()">Save Sheet <span class="shortcut">Ctrl+S</span></div>
-                        <div class="item" onclick="triggerLoadSpreadsheet()">Load Sheet <span class="shortcut">Ctrl+O</span></div>
+                        <div class="item" onclick="saveSpreadsheetToFile()">Save JSON State <span class="shortcut">Ctrl+S</span></div>
+                        <div class="item" onclick="triggerLoadSpreadsheet()">Load JSON State <span class="shortcut">Ctrl+O</span></div>
+                        <div class="divider"></div>
+                        <div class="item" onclick="saveSpreadsheetToXLSX()">Export Excel (.xlsx)</div>
+                        <div class="item" onclick="triggerLoadXLSX()">Import Excel (.xlsx)</div>
                         <div class="divider"></div>
                         <div class="item" onclick="printSpreadsheet()">Print <span class="shortcut">Ctrl+P</span></div>
                     </div>
@@ -1313,6 +1318,8 @@
             </div>
             <!-- Hidden Load Input -->
             <input type="file" id="menuLoadInput" accept=".json" style="display:none;" onchange="loadSpreadsheetFromFile(event)" />
+            <!-- Hidden Load XLSX Input -->
+            <input type="file" id="menuLoadXLSXInput" accept=".xlsx,.xls" style="display:none;" onchange="loadSpreadsheetFromXLSX(event)" />
 
             <!-- Toolbar -->
             <div class="toolbar" id="toolbar">
@@ -4021,10 +4028,138 @@
                     setStatus("Spreadsheet saved successfully!");
                 };
 
+                window.saveSpreadsheetToXLSX = function() {
+                    try {
+                        const wb = XLSX.utils.book_new();
+                        const ws = {};
+                        
+                        const maxR = state.cells.length;
+                        const maxC = state.cells[0] ? state.cells[0].length : 0;
+                        
+                        ws['!ref'] = XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: maxC - 1, r: maxR - 1 } });
+                        
+                        for (let r = 0; r < maxR; r++) {
+                            for (let c = 0; c < maxC; c++) {
+                                const cellData = getCell(r, c);
+                                if (!cellData || (cellData.value === '' && cellData.raw === '')) continue;
+                                
+                                const cellRef = XLSX.utils.encode_cell({ r, c });
+                                const cellObj = {};
+                                
+                                const raw = String(cellData.raw || '');
+                                if (raw.startsWith('=')) {
+                                    cellObj.f = raw.substring(1);
+                                    const val = cellData.value;
+                                    if (typeof val === 'number') {
+                                        cellObj.v = val;
+                                        cellObj.t = 'n';
+                                    } else {
+                                        cellObj.v = String(val);
+                                        cellObj.t = 's';
+                                    }
+                                } else {
+                                    const numVal = parseFloat(cellData.value);
+                                    if (!isNaN(numVal) && String(numVal) === String(cellData.value)) {
+                                        cellObj.v = numVal;
+                                        cellObj.t = 'n';
+                                    } else {
+                                        cellObj.v = String(cellData.value);
+                                        cellObj.t = 's';
+                                    }
+                                }
+                                ws[cellRef] = cellObj;
+                            }
+                        }
+                        
+                        ws['!cols'] = state.colWidths.map(w => ({ wch: w / 8 }));
+                        XLSX.utils.book_append_sheet(wb, ws, "GridQuest_Sheet");
+                        XLSX.writeFile(wb, `gridquest_export_${Date.now()}.xlsx`);
+                        closeAllMenuDropdowns();
+                        setStatus("Exported as Excel spreadsheet (.xlsx)");
+                    } catch (err) {
+                        alert("Failed to export as XLSX: " + err.message);
+                    }
+                };
+
                 window.triggerLoadSpreadsheet = function() {
                     const input = document.getElementById('menuLoadInput');
                     if (input) input.click();
                     closeAllMenuDropdowns();
+                };
+
+                window.triggerLoadXLSX = function() {
+                    const input = document.getElementById('menuLoadXLSXInput');
+                    if (input) input.click();
+                    closeAllMenuDropdowns();
+                };
+
+                window.loadSpreadsheetFromXLSX = function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function(evt) {
+                        try {
+                            const data = new Uint8Array(evt.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            
+                            const firstSheetName = workbook.SheetNames[0];
+                            const ws = workbook.Sheets[firstSheetName];
+                            if (!ws) {
+                                alert("Failed to load Excel worksheet.");
+                                return;
+                            }
+                            
+                            const ref = ws['!ref'] || 'A1:O40';
+                            const range = XLSX.utils.decode_range(ref);
+                            const endRow = Math.min(100, range.e.r + 1);
+                            const endCol = Math.min(26, range.e.c + 1);
+                            
+                            pushUndo();
+                            
+                            const targetRows = Math.max(40, endRow);
+                            const targetCols = Math.max(15, endCol);
+                            resizeGridDimension(targetRows, targetCols);
+                            
+                            clearAllCellsSilently();
+                            
+                            for (let r = 0; r < targetRows; r++) {
+                                for (let c = 0; c < targetCols; c++) {
+                                    const cellRef = XLSX.utils.encode_cell({ r, c });
+                                    const cellObj = ws[cellRef];
+                                    
+                                    if (cellObj) {
+                                        let raw = '';
+                                        let value = '';
+                                        
+                                        if (cellObj.f) {
+                                            raw = '=' + cellObj.f;
+                                            value = cellObj.v !== undefined ? cellObj.v : '';
+                                        } else {
+                                            raw = cellObj.v !== undefined ? String(cellObj.v) : '';
+                                            value = cellObj.v !== undefined ? cellObj.v : '';
+                                        }
+                                        
+                                        state.cells[r][c] = {
+                                            value: value,
+                                            raw: raw,
+                                            style: {},
+                                            format: 'general'
+                                        };
+                                    }
+                                }
+                            }
+                            
+                            render();
+                            updateSmartView();
+                            updateFormulaBar();
+                            checkMissionProgress();
+                            setStatus("Loaded Excel spreadsheet (.xlsx)");
+                        } catch (err) {
+                            alert("Failed to load Excel spreadsheet: " + err.message);
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                    e.target.value = '';
                 };
 
                 window.loadSpreadsheetFromFile = function(e) {
