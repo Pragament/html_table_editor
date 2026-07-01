@@ -2532,16 +2532,154 @@
             // -------- AUTOFULL & MAGIC FILL (Bug Fixes) --------
             let autofillData = null;
 
+            function shiftFormula(formula, rowOffset, colOffset) {
+                if (typeof formula !== 'string' || !formula.startsWith('=')) return formula;
+                const regex = /(\$)?([A-Z]+)(\$)?([0-9]+)/ig;
+                return formula.replace(regex, (match, colAbs, colLetter, rowAbs, rowNumStr) => {
+                    let col = letterToCol(colLetter);
+                    let row = parseInt(rowNumStr, 10) - 1;
+                    if (!colAbs) col += colOffset;
+                    if (!rowAbs) row += rowOffset;
+                    const newColLetter = colToLetter(Math.max(0, Math.min(col, COLS - 1)));
+                    const newRowNum = Math.max(0, Math.min(row, ROWS - 1)) + 1;
+                    return (colAbs || '') + newColLetter + (rowAbs || '') + newRowNum;
+                });
+            }
+
+            function getAutofillCellAt(srcCells, index, startRowOrCol, isVertical, targetCoord, cOrR) {
+                let srcIdx;
+                const len = srcCells.length;
+                if (index >= 0 && index < len) {
+                    srcIdx = index;
+                } else if (index >= len) {
+                    srcIdx = (index - len) % len;
+                } else {
+                    srcIdx = ((index % len) + len) % len;
+                }
+                const baseCell = srcCells[srcIdx];
+                if (!baseCell) return { value: '', raw: '', style: {}, format: 'general' };
+
+                // Case 1: Check if the base cell has a formula
+                if (baseCell.raw && baseCell.raw.startsWith('=')) {
+                    const srcRow = isVertical ? (startRowOrCol + srcIdx) : cOrR;
+                    const srcCol = isVertical ? cOrR : (startRowOrCol + srcIdx);
+                    const targetRow = isVertical ? targetCoord : cOrR;
+                    const targetCol = isVertical ? cOrR : targetCoord;
+                    const rowOffset = targetRow - srcRow;
+                    const colOffset = targetCol - srcCol;
+                    const newRaw = shiftFormula(baseCell.raw, rowOffset, colOffset);
+                    const newVal = evaluateFormula(newRaw, { row: targetRow, col: targetCol });
+                    return {
+                        value: newVal,
+                        raw: newRaw,
+                        style: baseCell.style ? { ...baseCell.style } : {},
+                        format: baseCell.format || 'general'
+                    };
+                }
+
+                // Try to detect progression patterns (only if len >= 2 and no formulas in source)
+                const hasFormula = srcCells.some(cell => cell && cell.raw && cell.raw.startsWith('='));
+                if (!hasFormula && len >= 2) {
+                    // Case 2: Numeric progression
+                    const nums = srcCells.map(cell => {
+                        const val = cell ? cell.value : '';
+                        const parsed = parseFloat(val);
+                        return isNaN(parsed) ? NaN : parsed;
+                    });
+                    const isNumeric = nums.every(n => !isNaN(n));
+
+                    if (isNumeric) {
+                        const diffs = [];
+                        for (let i = 1; i < len; i++) {
+                            diffs.push(nums[i] - nums[i - 1]);
+                        }
+                        const allEqual = diffs.every(d => Math.abs(d - diffs[0]) < 1e-9);
+                        if (allEqual) {
+                            const diff = diffs[0];
+                            let targetVal;
+                            if (index >= len) {
+                                targetVal = nums[len - 1] + diff * (index - (len - 1));
+                            } else if (index < 0) {
+                                targetVal = nums[0] + diff * index;
+                            } else {
+                                targetVal = nums[index];
+                            }
+                            
+                            // Copy style/format from nearest boundary cell
+                            const boundaryCell = index >= len ? srcCells[len - 1] : (index < 0 ? srcCells[0] : srcCells[index]);
+                            return {
+                                value: targetVal,
+                                raw: String(targetVal),
+                                style: boundaryCell && boundaryCell.style ? { ...boundaryCell.style } : {},
+                                format: boundaryCell ? boundaryCell.format : 'general'
+                            };
+                        }
+                    }
+
+                    // Case 3: String with numeric suffix progression (e.g., "Item 1", "Item 2")
+                    const matches = srcCells.map(cell => {
+                        const valStr = cell ? String(cell.value) : '';
+                        const match = valStr.match(/^(.*?)(\d+)$/);
+                        return match ? { prefix: match[1], num: parseInt(match[2], 10), suffixLen: match[2].length } : null;
+                    });
+                    const isPattern = matches.every(m => m !== null) && 
+                                      matches.every(m => m.prefix === matches[0].prefix);
+
+                    if (isPattern) {
+                        const nums = matches.map(m => m.num);
+                        const diffs = [];
+                        for (let i = 1; i < len; i++) {
+                            diffs.push(nums[i] - nums[i - 1]);
+                        }
+                        const allEqual = diffs.every(d => Math.abs(d - diffs[0]) < 1e-9);
+                        if (allEqual) {
+                            const diff = diffs[0];
+                            let targetNum;
+                            if (index >= len) {
+                                targetNum = nums[len - 1] + diff * (index - (len - 1));
+                            } else if (index < 0) {
+                                targetNum = nums[0] + diff * index;
+                            } else {
+                                targetNum = nums[index];
+                            }
+                            
+                            const prefix = matches[0].prefix;
+                            const padLength = matches[0].suffixLen;
+                            const padZero = (n, l) => {
+                                if (n < 0) return '-' + String(Math.abs(n)).padStart(l, '0');
+                                return String(n).padStart(l, '0');
+                            };
+                            const targetVal = prefix + padZero(targetNum, padLength);
+                            const boundaryCell = index >= len ? srcCells[len - 1] : (index < 0 ? srcCells[0] : srcCells[index]);
+                            return {
+                                value: targetVal,
+                                raw: String(targetVal),
+                                style: boundaryCell && boundaryCell.style ? { ...boundaryCell.style } : {},
+                                format: boundaryCell ? boundaryCell.format : 'general'
+                            };
+                        }
+                    }
+                }
+
+                // Case 4: No pattern (or single cell). Simple repeat/wrap mapping.
+                return {
+                    value: baseCell.value,
+                    raw: baseCell.raw,
+                    style: baseCell.style ? { ...baseCell.style } : {},
+                    format: baseCell.format || 'general'
+                };
+            }
+
             function initAutofill(e) {
                 if (state.selection.type !== 'cell' && state.selection.type !== 'range') return;
                 const active = state.activeCell;
                 const cell = getCell(active.row, active.col);
                 if (!cell) return;
                 autofillData = {
-                    startRow: state.selection.startRow,
-                    startCol: state.selection.startCol,
-                    endRow: state.selection.endRow,
-                    endCol: state.selection.endCol,
+                    startRow: Math.min(state.selection.startRow, state.selection.endRow),
+                    startCol: Math.min(state.selection.startCol, state.selection.endCol),
+                    endRow: Math.max(state.selection.startRow, state.selection.endRow),
+                    endCol: Math.max(state.selection.startCol, state.selection.endCol),
                     value: cell.value,
                     raw: cell.raw,
                 };
@@ -2560,10 +2698,21 @@
                 const col = parseInt(cellEl.dataset.col);
                 if (isNaN(row) || isNaN(col)) return;
 
-                const sR = Math.min(autofillData.startRow, row);
-                const eR = Math.max(autofillData.endRow, row);
-                const sC = Math.min(autofillData.startCol, col);
-                const eC = Math.max(autofillData.endCol, col);
+                const distY = Math.max(0, autofillData.startRow - row, row - autofillData.endRow);
+                const distX = Math.max(0, autofillData.startCol - col, col - autofillData.endCol);
+
+                let sR, eR, sC, eC;
+                if (distY >= distX) {
+                    sR = Math.min(autofillData.startRow, row);
+                    eR = Math.max(autofillData.endRow, row);
+                    sC = autofillData.startCol;
+                    eC = autofillData.endCol;
+                } else {
+                    sR = autofillData.startRow;
+                    eR = autofillData.endRow;
+                    sC = Math.min(autofillData.startCol, col);
+                    eC = Math.max(autofillData.endCol, col);
+                }
 
                 const topLeft = getCellPosition(sR, sC);
                 const bottomRight = getCellPosition(eR, eC);
@@ -2580,8 +2729,8 @@
                     selectionOverlay.style.background = 'rgba(227, 162, 0, 0.08)';
                 }
 
-                autofillData.targetRow = row;
-                autofillData.targetCol = col;
+                autofillData.targetRow = (distY >= distX) ? row : autofillData.endRow;
+                autofillData.targetCol = (distY >= distX) ? autofillData.endCol : col;
             }
 
             function onAutofillEnd(e) {
@@ -2590,24 +2739,58 @@
                 if (autofillData && autofillData.targetRow !== undefined && autofillData.targetCol !== undefined) {
                     pushUndo(); // backup snap
                     
-                    const sR = Math.min(autofillData.startRow, autofillData.targetRow);
-                    const eR = Math.max(autofillData.endRow, autofillData.targetRow);
-                    const sC = Math.min(autofillData.startCol, autofillData.targetCol);
-                    const eC = Math.max(autofillData.endCol, autofillData.targetCol);
+                    const distY = Math.max(0, autofillData.startRow - autofillData.targetRow, autofillData.targetRow - autofillData.endRow);
+                    const distX = Math.max(0, autofillData.startCol - autofillData.targetCol, autofillData.targetCol - autofillData.endCol);
 
-                    for (let r = sR; r <= eR; r++) {
+                    const dragDir = distY >= distX ? 'vertical' : 'horizontal';
+                    let sR, eR, sC, eC;
+                    if (dragDir === 'vertical') {
+                        sR = Math.min(autofillData.startRow, autofillData.targetRow);
+                        eR = Math.max(autofillData.endRow, autofillData.targetRow);
+                        sC = autofillData.startCol;
+                        eC = autofillData.endCol;
+                    } else {
+                        sR = autofillData.startRow;
+                        eR = autofillData.endRow;
+                        sC = Math.min(autofillData.startCol, autofillData.targetCol);
+                        eC = Math.max(autofillData.endCol, autofillData.targetCol);
+                    }
+
+                    if (dragDir === 'vertical') {
                         for (let c = sC; c <= eC; c++) {
-                            // Don't overwrite the source range itself
-                            if (r >= autofillData.startRow && r <= autofillData.endRow &&
-                                c >= autofillData.startCol && c <= autofillData.endCol) continue;
-                            const cell = getCell(r, c);
-                            if (cell) {
-                                const src = getCell(autofillData.startRow, autofillData.startCol);
-                                if (src) {
-                                    cell.value = src.value;
-                                    cell.raw = src.raw;
-                                    cell.style = { ...src.style };
-                                    cell.format = src.format;
+                            const srcCells = [];
+                            for (let r = autofillData.startRow; r <= autofillData.endRow; r++) {
+                                srcCells.push(getCell(r, c));
+                            }
+                            for (let r = sR; r <= eR; r++) {
+                                if (r >= autofillData.startRow && r <= autofillData.endRow) continue;
+                                const cell = getCell(r, c);
+                                if (cell) {
+                                    const index = r - autofillData.startRow;
+                                    const fillCell = getAutofillCellAt(srcCells, index, autofillData.startRow, true, r, c);
+                                    cell.value = fillCell.value;
+                                    cell.raw = fillCell.raw;
+                                    cell.style = { ...fillCell.style };
+                                    cell.format = fillCell.format;
+                                }
+                            }
+                        }
+                    } else {
+                        for (let r = sR; r <= eR; r++) {
+                            const srcCells = [];
+                            for (let c = autofillData.startCol; c <= autofillData.endCol; c++) {
+                                srcCells.push(getCell(r, c));
+                            }
+                            for (let c = sC; c <= eC; c++) {
+                                if (c >= autofillData.startCol && c <= autofillData.endCol) continue;
+                                const cell = getCell(r, c);
+                                if (cell) {
+                                    const index = c - autofillData.startCol;
+                                    const fillCell = getAutofillCellAt(srcCells, index, autofillData.startCol, false, c, r);
+                                    cell.value = fillCell.value;
+                                    cell.raw = fillCell.raw;
+                                    cell.style = { ...fillCell.style };
+                                    cell.format = fillCell.format;
                                 }
                             }
                         }
@@ -3610,7 +3793,22 @@
             function copySelection() {
                 const data = getSelectionData();
                 if (data) {
-                    state.clipboard = { data, cut: false };
+                    const sel = state.selection;
+                    let startRow = 0, startCol = 0;
+                    if (sel.type === 'cell') {
+                        startRow = sel.activeRow;
+                        startCol = sel.activeCol;
+                    } else if (sel.type === 'range') {
+                        startRow = Math.min(sel.startRow, sel.endRow);
+                        startCol = Math.min(sel.startCol, sel.endCol);
+                    } else if (sel.type === 'row') {
+                        startRow = sel.activeRow;
+                        startCol = 0;
+                    } else if (sel.type === 'col') {
+                        startRow = 0;
+                        startCol = sel.activeCol;
+                    }
+                    state.clipboard = { data, cut: false, startRow, startCol };
                     setStatus('Selection copied to clipboard');
                 }
             }
@@ -3618,7 +3816,22 @@
             function cutSelection() {
                 const data = getSelectionData();
                 if (data) {
-                    state.clipboard = { data, cut: true };
+                    const sel = state.selection;
+                    let startRow = 0, startCol = 0;
+                    if (sel.type === 'cell') {
+                        startRow = sel.activeRow;
+                        startCol = sel.activeCol;
+                    } else if (sel.type === 'range') {
+                        startRow = Math.min(sel.startRow, sel.endRow);
+                        startCol = Math.min(sel.startCol, sel.endCol);
+                    } else if (sel.type === 'row') {
+                        startRow = sel.activeRow;
+                        startCol = 0;
+                    } else if (sel.type === 'col') {
+                        startRow = 0;
+                        startCol = sel.activeCol;
+                    }
+                    state.clipboard = { data, cut: true, startRow, startCol };
                     clearSelectionData();
                     setStatus('Selection cut to clipboard');
                 }
@@ -3626,11 +3839,14 @@
 
             function pasteClipboard() {
                 if (!state.clipboard) return;
-                const { data, cut } = state.clipboard;
+                const { data, cut, startRow, startCol } = state.clipboard;
                 const active = state.activeCell;
                 
                 pushUndo(); // Snap stack
                 
+                const rowOffset = (startRow !== undefined) ? (active.row - startRow) : 0;
+                const colOffset = (startCol !== undefined) ? (active.col - startCol) : 0;
+
                 for (let r = 0; r < data.length; r++) {
                     for (let c = 0; c < data[r].length; c++) {
                         const trgR = active.row + r;
@@ -3640,8 +3856,14 @@
                         const cell = getCell(trgR, trgC);
                         if (cell) {
                             const src = data[r][c];
-                            cell.value = src.value;
-                            cell.raw = src.raw;
+                            let newRaw = src.raw;
+                            let newValue = src.value;
+                            if (src.raw && src.raw.startsWith('=')) {
+                                newRaw = shiftFormula(src.raw, rowOffset, colOffset);
+                                newValue = evaluateFormula(newRaw, { row: trgR, col: trgC });
+                            }
+                            cell.value = newValue;
+                            cell.raw = newRaw;
                             cell.style = { ...src.style };
                             cell.format = src.format;
                         }
