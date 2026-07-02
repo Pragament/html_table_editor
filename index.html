@@ -3740,7 +3740,7 @@
                 else if (ctrl && e.key === 'i') { e.preventDefault(); applyStyle({ italic: !getCurrentStyle('italic') }); }
                 else if (ctrl && e.key === 'u') { e.preventDefault(); applyStyle({ underline: !getCurrentStyle('underline') }); }
                 // Typing starts edit
-                else if (e.key.length === 1 && !ctrl && !alt && e.key.match(/[a-zA-Z0-9 ]/)) {
+                else if (e.key.length === 1 && !ctrl && !alt) {
                     startEditing(active.row, active.col);
                     setTimeout(() => {
                         const input = document.querySelector('.cell-input');
