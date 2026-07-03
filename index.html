@@ -1357,7 +1357,7 @@
                 </div>
                 <div class="group">
                     <button id="btnCreateChart" class="special-action-btn" title="Create SVG Chart (Bar/Pie/Line) from selection">📊 Create Chart</button>
-                    <button id="btnMagicFill" title="Magic Fill (Ctrl+E)">✨ Magic Fill</button>
+                    <button id="btnMagicFill" data-testid="magic-fill-button" title="Magic Fill (Ctrl+E)">✨ Magic Fill</button>
                 </div>
             </div>
 
@@ -1365,13 +1365,13 @@
             <div class="formula-bar" id="formulaBar">
                 <span class="ref" id="cellRef">A1</span>
                 <span class="fx-label">fx</span>
-                <input class="formula-input" id="formulaInput" placeholder="Enter text, number, or formula starting with '=' (e.g. =A1+B1)" spellcheck="false" />
+                <input class="formula-input" id="formulaInput" data-testid="formula-input" placeholder="Enter text, number, or formula starting with '=' (e.g. =A1+B1)" spellcheck="false" />
             </div>
 
             <!-- Spreadsheet Grid Grid -->
             <div class="table-wrapper" id="tableWrapper">
                 <div class="table-container" id="tableContainer">
-                    <div class="grid" id="grid"></div>
+                    <div class="grid" id="grid" data-testid="spreadsheet-grid" tabindex="0"></div>
 
                     <!-- Corner Handles overlay -->
                     <div class="handle handle-top-left" id="handleTopLeft" title="Move table">
@@ -1794,7 +1794,7 @@
                         const styleStr = buildCellStyle(cell);
 
                         html += `<div class="${classes}" 
-                                   data-row="${r}" data-col="${c}" 
+                                   data-row="${r}" data-col="${c}" data-testid="cell-${r}-${c}" 
                                    style="grid-row:${r+2};grid-column:${c+2};${styleStr}">
                                 <span class="cell-content">${escapeHtml(displayVal)}</span>
                              </div>`;
@@ -2018,6 +2018,53 @@
                     r <= Math.max(sel.startRow, sel.endRow) &&
                     c >= Math.min(sel.startCol, sel.endCol) &&
                     c <= Math.max(sel.startCol, sel.endCol);
+            }
+
+            function focusGrid() {
+                if (!state.isEditing && document.activeElement !== formulaInput) {
+                    grid.focus({ preventScroll: true });
+                }
+            }
+
+            function updateSelectionClasses() {
+                grid.querySelectorAll('.cell').forEach(el => {
+                    const r = parseInt(el.dataset.row);
+                    const c = parseInt(el.dataset.col);
+                    if (isNaN(r) || isNaN(c)) return;
+
+                    const isActive = state.activeCell.row === r && state.activeCell.col === c;
+                    const isSelected = isCellSelected(r, c);
+                    const isRange = isCellInRange(r, c);
+
+                    el.classList.toggle('active-cell', isActive);
+                    el.classList.toggle('range-selected', isRange && state.selection.type === 'range');
+                    el.classList.toggle('selected', isSelected && (state.selection.type === 'cell' || state.selection.type === 'range'));
+                });
+
+                grid.querySelectorAll('.col-header').forEach(el => {
+                    const c = parseInt(el.dataset.col);
+                    const selected = state.selection.type === 'col' &&
+                        c >= Math.min(state.selection.startCol, state.selection.endCol) &&
+                        c <= Math.max(state.selection.startCol, state.selection.endCol);
+                    el.classList.toggle('selected', selected);
+                });
+
+                grid.querySelectorAll('.row-header').forEach(el => {
+                    const r = parseInt(el.dataset.row);
+                    const selected = state.selection.type === 'row' &&
+                        r >= Math.min(state.selection.startRow, state.selection.endRow) &&
+                        r <= Math.max(state.selection.startRow, state.selection.endRow);
+                    el.classList.toggle('selected', selected);
+                });
+            }
+
+            function updateSelectionUI() {
+                updateSelectionClasses();
+                updateAutofillHandle();
+                updateSelectionOverlay();
+                updateSmartView();
+                updateFormulaBar();
+                focusGrid();
             }
 
             function getCell(row, col) {
@@ -2304,9 +2351,7 @@
                 state.activeCell.col = col;
                 state.isEditing = false;
                 
-                render();
-                updateSmartView();
-                updateFormulaBar();
+                updateSelectionUI();
             }
 
             function selectRange(startRow, startCol, endRow, endCol) {
@@ -2320,9 +2365,7 @@
                 state.activeCell.row = endRow;
                 state.activeCell.col = endCol;
                 
-                render();
-                updateSmartView();
-                updateFormulaBar();
+                updateSelectionUI();
             }
 
             function selectRow(row) {
@@ -2335,9 +2378,7 @@
                 state.activeCell.row = row;
                 state.activeCell.col = 0;
                 
-                render();
-                updateSmartView();
-                updateFormulaBar();
+                updateSelectionUI();
             }
 
             function selectCol(col) {
@@ -2350,9 +2391,7 @@
                 state.activeCell.row = 0;
                 state.activeCell.col = col;
                 
-                render();
-                updateSmartView();
-                updateFormulaBar();
+                updateSelectionUI();
             }
 
             function selectAll() {
@@ -2364,9 +2403,7 @@
                 state.activeCell.row = 0;
                 state.activeCell.col = 0;
                 
-                render();
-                updateSmartView();
-                updateFormulaBar();
+                updateSelectionUI();
                 setStatus('Entire table selected');
             }
 
@@ -3066,13 +3103,16 @@
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
+                        e.stopPropagation();
                         finish(true);
                         if (row + 1 < ROWS) selectCell(row + 1, col);
                     } else if (e.key === 'Escape') {
                         e.preventDefault();
+                        e.stopPropagation();
                         finish(false);
                     } else if (e.key === 'Tab') {
                         e.preventDefault();
+                        e.stopPropagation();
                         finish(true);
                         if (e.shiftKey) {
                             if (col > 0) selectCell(row, col - 1);
@@ -4122,6 +4162,7 @@
                 formulaInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
+                        e.stopPropagation();
                         const val = formulaInput.value;
                         const active = state.activeCell;
                         setCellValue(active.row, active.col, val.startsWith('=') ? evaluateFormula(val, active) : (isNaN(parseFloat(val)) ? val : parseFloat(val)), val);

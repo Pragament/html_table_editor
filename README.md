@@ -59,3 +59,17 @@ npm test
 ```
 
 The current regression covers a student creating a multiplication table with **Magic Fill**.
+
+---
+
+## 🧪 TODO: Make Tests Shorter and More Natural
+
+These improvements would let future browser tests use normal Playwright actions instead of DOM-event workarounds:
+
+- [ ] Keep clicked grid cells stable long enough for Playwright `locator.click()` to complete without the element being detached by immediate re-rendering.
+- [ ] Ensure keyboard focus moves to the spreadsheet grid after selecting a cell, so tests and users can press `Enter`, arrow keys, and shortcuts predictably.
+- [ ] Stop formula-bar `Enter` events from bubbling into the document-level keyboard handler and accidentally starting in-cell editing.
+- [ ] Add stable testing hooks such as `data-testid` attributes for cells, toolbar buttons, formula input, and status text.
+- [ ] Extract spreadsheet actions like `setCellValue`, `selectRange`, and `magicFill` into a small testable module or public app API.
+- [ ] Add focused unit tests for Magic Fill pattern detection so browser tests only need to verify one real user workflow.
+- [ ] Reduce full-grid re-renders for simple selection changes, or preserve cell identity where possible.
