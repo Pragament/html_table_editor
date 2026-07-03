@@ -1838,6 +1838,20 @@
                 
                 let expr = raw.substring(1).trim();
                 
+                // Special case: A1/B1 without parentheses should return a fraction string, not a decimal number.
+                const directFractionRegex = /^\s*\$?([A-Z]+)\$?([0-9]+)\s*\/\s*\$?([A-Z]+)\$?([0-9]+)\s*$/i;
+                const fractionMatch = expr.match(directFractionRegex);
+                if (fractionMatch) {
+                    const leftRef = { row: parseInt(fractionMatch[2], 10) - 1, col: letterToCol(fractionMatch[1].toUpperCase()) };
+                    const rightRef = { row: parseInt(fractionMatch[4], 10) - 1, col: letterToCol(fractionMatch[3].toUpperCase()) };
+                    const leftVal = getResolvedCellValue(leftRef.row, leftRef.col, visited);
+                    const rightVal = getResolvedCellValue(rightRef.row, rightRef.col, visited);
+                    const leftStr = leftVal === null || leftVal === undefined ? '' : String(leftVal);
+                    const rightStr = rightVal === null || rightVal === undefined ? '' : String(rightVal);
+                    if (selfKey) visited.delete(selfKey);
+                    return leftStr + '/' + rightStr;
+                }
+                
                 // 1. Evaluate Built-in Functions: SUM, AVERAGE, MIN, MAX, COUNT
                 const rangeFuncRegex = /(SUM|AVERAGE|MIN|MAX|COUNT)\(([^)]+)\)/ig;
                 let match;
@@ -1905,10 +1919,12 @@
                 
                 // 3. Mathematical Expression Computation (Sanitized Safe Function evaluation)
                 try {
-                    const sanitized = expr.replace(/[^0-9+\-*/%().<>=!\s"']/g, '');
+                    // Allow Excel-style string concatenation operator '&' and convert it to JS '+'
+                    const sanitized = expr.replace(/[^0-9+\-*/%().<>=!&\s"']/g, '');
                     if (sanitized.trim() === '') return '';
+                    const normalizedExpr = sanitized.replace(/&/g, '+');
                     
-                    const result = Function('"use strict"; return (' + sanitized + ')')();
+                    const result = Function('"use strict"; return (' + normalizedExpr + ')')();
                     if (result === Infinity || result === -Infinity) return '#DIV/0!';
                     if (typeof result === 'number' && isNaN(result)) return '#ERROR';
                     return result;
