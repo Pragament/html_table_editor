@@ -2829,18 +2829,20 @@
                     return;
                 }
 
-                const nums = values.map(v => parseFloat(v));
-                if (nums.every(n => !isNaN(n))) {
-                    const diff = nums[1] - nums[0];
+                const numericSeeds = values
+                    .map((v, index) => ({ value: parseFloat(v), row: startRow + index }))
+                    .filter(seed => !isNaN(seed.value));
+                if (numericSeeds.length >= 2) {
+                    const rowGap = numericSeeds[1].row - numericSeeds[0].row;
+                    const diff = rowGap === 0 ? NaN : (numericSeeds[1].value - numericSeeds[0].value) / rowGap;
                     if (diff !== 0 && !isNaN(diff)) {
                         pushUndo();
                         
-                        // CLAMP: Only fill inside the user selected target range, or down if it extends
-                        // Standard excel magic fill down the column of selection
-                        for (let r = startRow + 2; r <= endRow; r++) {
+                        // Fill the selected column from the first two numeric seeds, including blank cells.
+                        for (let r = startRow; r <= endRow; r++) {
                             const cell = getCell(r, col);
                             if (cell) {
-                                const newVal = (nums[0] || 0) + diff * (r - startRow);
+                                const newVal = numericSeeds[0].value + diff * (r - numericSeeds[0].row);
                                 cell.value = newVal;
                                 cell.raw = String(newVal);
                             }

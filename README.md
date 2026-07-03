@@ -46,3 +46,16 @@ GridQuest has **zero dependencies** and operates completely in the browser offli
 1. Double-click or open **`index.html`** in any modern web browser.
 2. Open the **Academy Panel** on the right side.
 3. Click **"Load Template"** on Mission 1 to begin your spreadsheet journey!
+
+---
+
+## ✅ Before Creating a Pull Request
+
+Run the regression test suite:
+
+```bash
+npm install
+npm test
+```
+
+The current regression covers a student creating a multiplication table with **Magic Fill**.
