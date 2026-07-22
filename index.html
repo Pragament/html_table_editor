@@ -1959,30 +1959,108 @@
                 return !isNaN(num) ? num : cell.value;
             }
 
+            function parseAndFormatDate(val) {
+                if (val === undefined || val === null || val === '') return '';
+                const str = String(val).trim();
+                
+                const monthsMap = {
+                    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+                    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+                };
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                let day = null, month = null, year = null, formatType = null;
+
+                let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if (m) {
+                    day = parseInt(m[1], 10);
+                    month = parseInt(m[2], 10);
+                    year = parseInt(m[3], 10);
+                    formatType = 'dd/mm/yyyy';
+                } else {
+                    m = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+                    if (m) {
+                        day = parseInt(m[1], 10);
+                        month = parseInt(m[2], 10);
+                        year = parseInt(m[3], 10);
+                        formatType = 'dd-mm-yyyy';
+                    } else {
+                        m = str.match(/^(\d{1,2})-([a-zA-Z]{3,})-(\d{4})$/);
+                        if (m) {
+                            day = parseInt(m[1], 10);
+                            const mStr = m[2].toLowerCase();
+                            if (monthsMap[mStr]) {
+                                month = monthsMap[mStr];
+                                year = parseInt(m[3], 10);
+                                formatType = 'dd-MMM-yyyy';
+                            }
+                        } else {
+                            m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+                            if (m) {
+                                year = parseInt(m[1], 10);
+                                month = parseInt(m[2], 10);
+                                day = parseInt(m[3], 10);
+                                formatType = 'yyyy-mm-dd';
+                            }
+                        }
+                    }
+                }
+
+                if (day !== null && month !== null && year !== null) {
+                    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1000 || year > 9999) {
+                        return '#ERROR';
+                    }
+                    const d = new Date(year, month - 1, day);
+                    if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+                        return '#ERROR';
+                    }
+                    
+                    const dd = String(day).padStart(2, '0');
+                    const mm = String(month).padStart(2, '0');
+                    
+                    if (formatType === 'dd/mm/yyyy') return `${dd}/${mm}/${year}`;
+                    if (formatType === 'dd-mm-yyyy') return `${dd}-${mm}-${year}`;
+                    if (formatType === 'dd-MMM-yyyy') return `${dd}-${monthNames[month - 1]}-${year}`;
+                    if (formatType === 'yyyy-mm-dd') return `${year}-${mm}-${dd}`;
+                }
+
+                if (!isNaN(Date.parse(str))) {
+                    const d = new Date(str);
+                    if (!isNaN(d.getTime())) {
+                        const yr = d.getFullYear();
+                        if (yr >= 1000 && yr <= 9999) {
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            return `${dd}/${mm}/${yr}`;
+                        }
+                    }
+                }
+
+                return '#ERROR';
+            }
+
             function getDisplayValue(cell, refSelf) {
                 if (!cell) return '';
+                let val = cell.value;
                 if (cell.raw && cell.raw.startsWith('=')) {
                     try {
-                        return evaluateFormula(cell.raw, refSelf);
+                        val = evaluateFormula(cell.raw, refSelf);
                     } catch (e) {
                         return '#ERROR';
                     }
                 }
                 if (cell.format === 'currency') {
-                    const num = parseFloat(cell.value);
+                    const num = parseFloat(val);
                     if (!isNaN(num)) return '$' + num.toFixed(2);
                 }
                 if (cell.format === 'percent') {
-                    const num = parseFloat(cell.value);
+                    const num = parseFloat(val);
                     if (!isNaN(num)) return (num * 100).toFixed(1) + '%';
                 }
                 if (cell.format === 'date') {
-                    if (cell.value && !isNaN(Date.parse(cell.value))) {
-                        const d = new Date(cell.value);
-                        return d.toLocaleDateString();
-                    }
+                    return parseAndFormatDate(val !== undefined && val !== null ? val : cell.raw);
                 }
-                return cell.value !== undefined && cell.value !== null ? String(cell.value) : '';
+                return val !== undefined && val !== null ? String(val) : '';
             }
 
             function getCellValueNumeric(row, col) {
@@ -3156,8 +3234,9 @@
                             }
                         } else {
                             cell.raw = val;
-                            const num = parseFloat(val);
-                            cell.value = isNaN(num) ? val : num;
+                            const trimmed = val.trim();
+                            const isNum = trimmed !== '' && !isNaN(Number(val));
+                            cell.value = isNum ? Number(val) : val;
                         }
                         
                         render();
@@ -4333,7 +4412,10 @@
                         e.stopPropagation();
                         const val = formulaInput.value;
                         const active = state.activeCell;
-                        setCellValue(active.row, active.col, val.startsWith('=') ? evaluateFormula(val, active) : (isNaN(parseFloat(val)) ? val : parseFloat(val)), val);
+                        const trimmed = val.trim();
+                        const isNum = trimmed !== '' && !isNaN(Number(val));
+                        const parsedVal = val.startsWith('=') ? evaluateFormula(val, active) : (isNum ? Number(val) : val);
+                        setCellValue(active.row, active.col, parsedVal, val);
                     }
                 });
 
