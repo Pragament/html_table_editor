@@ -1343,10 +1343,10 @@
                     </select>
                 </div>
                 <div class="group">
-                    <button id="btnFormatGeneral" title="General">General</button>
-                    <button id="btnFormatCurrency" title="Currency">$</button>
-                    <button id="btnFormatPercent" title="Percent">%</button>
-                    <button id="btnFormatDate" title="Date">📅 Date</button>
+                    <button id="btnFormatGeneral" data-testid="btnFormatGeneral" title="General">General</button>
+                    <button id="btnFormatCurrency" data-testid="btnFormatCurrency" title="Currency">$</button>
+                    <button id="btnFormatPercent" data-testid="btnFormatPercent" title="Percent">%</button>
+                    <button id="btnFormatDate" data-testid="btnFormatDate" title="Date">📅 Date</button>
                 </div>
                 <div class="group">
                     <button id="btnSortAsc" title="Sort Ascending A-Z / Low-High" style="font-weight:bold;">📶 Sort A-Z</button>
@@ -1852,6 +1852,18 @@
                     return leftStr + '/' + rightStr;
                 }
                 
+                // 0. Evaluate Date Functions: DATE, TODAY, NOW
+                expr = expr.replace(/DATE\s*\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})\s*\)/gi, (m, y, mon, d) => {
+                    return `"${y}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}"`;
+                });
+                expr = expr.replace(/TODAY\s*\(\s*\)/gi, () => {
+                    const now = new Date();
+                    return `"${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}"`;
+                });
+                expr = expr.replace(/NOW\s*\(\s*\)/gi, () => {
+                    return `"${new Date().toISOString()}"`;
+                });
+
                 // 1. Evaluate Built-in Functions: SUM, AVERAGE, MIN, MAX, COUNT
                 const rangeFuncRegex = /(SUM|AVERAGE|MIN|MAX|COUNT)\(([^)]+)\)/ig;
                 let match;
@@ -1945,30 +1957,180 @@
                 return !isNaN(num) ? num : cell.value;
             }
 
+            function parseDate(val) {
+                if (val === null || val === undefined || val === '') return null;
+                if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+
+                const isPureNumber = typeof val === 'number' || (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val.trim()));
+                if (isPureNumber) {
+                    const num = typeof val === 'number' ? val : parseFloat(val.trim());
+                    if (!isNaN(num)) {
+                        if (num > 10000000000) {
+                            const d = new Date(num);
+                            return isNaN(d.getTime()) ? null : d;
+                        }
+                        if (num >= 1 && num <= 2958465) {
+                            let days = Math.floor(num);
+                            if (days > 60) days--;
+                            const epoch = new Date(1899, 11, 31);
+                            const d = new Date(epoch.getTime() + days * 86400000);
+                            const frac = num - Math.floor(num);
+                            if (frac > 0) {
+                                d.setMilliseconds(d.getMilliseconds() + Math.round(frac * 86400000));
+                            }
+                            return d;
+                        }
+                    }
+                }
+
+                if (typeof val === 'string') {
+                    const str = val.trim();
+                    if (!str) return null;
+
+                    // 1. ISO format: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+                    let m = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+                    if (m) {
+                        const y = parseInt(m[1], 10);
+                        const mon = parseInt(m[2], 10) - 1;
+                        const day = parseInt(m[3], 10);
+                        if (mon >= 0 && mon < 12 && day >= 1 && day <= 31) {
+                            const d = new Date(y, mon, day);
+                            if (d.getFullYear() === y && d.getMonth() === mon && d.getDate() === day) return d;
+                        }
+                        return null;
+                    }
+
+                    // 2. DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY, DD.MM.YYYY, DD/MM/YY
+                    m = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/);
+                    if (m) {
+                        let p1 = parseInt(m[1], 10);
+                        let p2 = parseInt(m[2], 10);
+                        let y = parseInt(m[3], 10);
+                        if (m[3].length === 2) y += y < 50 ? 2000 : 1900;
+                        let mon, day;
+                        if (p1 > 12 && p2 <= 12) {
+                            day = p1; mon = p2 - 1;
+                        } else if (p2 > 12 && p1 <= 12) {
+                            mon = p1 - 1; day = p2;
+                        } else if (p1 <= 12 && p2 <= 31) {
+                            day = p1; mon = p2 - 1;
+                        } else {
+                            return null;
+                        }
+                        if (mon >= 0 && mon < 12 && day >= 1 && day <= 31) {
+                            const d = new Date(y, mon, day);
+                            if (d.getFullYear() === y && d.getMonth() === mon && d.getDate() === day) return d;
+                        }
+                        return null;
+                    }
+
+                    // 3. DD-MMM-YYYY e.g. 20-Jan-2025, 01-Jan-2024
+                    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+                    m = str.match(/^(\d{1,2})[-/.\s]+([a-zA-Z]+)[-/.\s]+(\d{2}|\d{4})$/);
+                    if (m) {
+                        const day = parseInt(m[1], 10);
+                        const monIdx = monthNames.findIndex(mn => m[2].toLowerCase().startsWith(mn));
+                        let y = parseInt(m[3], 10);
+                        if (m[3].length === 2) y += y < 50 ? 2000 : 1900;
+                        if (monIdx !== -1 && day >= 1 && day <= 31) {
+                            const d = new Date(y, monIdx, day);
+                            if (d.getFullYear() === y && d.getMonth() === monIdx && d.getDate() === day) return d;
+                        }
+                        return null;
+                    }
+
+                    // 4. MMM DD, YYYY e.g. Jan 20, 2025
+                    m = str.match(/^([a-zA-Z]+)[-/.\s]+(\d{1,2}),?[-/.\s]+(\d{2}|\d{4})$/);
+                    if (m) {
+                        const monIdx = monthNames.findIndex(mn => m[1].toLowerCase().startsWith(mn));
+                        const day = parseInt(m[2], 10);
+                        let y = parseInt(m[3], 10);
+                        if (m[3].length === 2) y += y < 50 ? 2000 : 1900;
+                        if (monIdx !== -1 && day >= 1 && day <= 31) {
+                            const d = new Date(y, monIdx, day);
+                            if (d.getFullYear() === y && d.getMonth() === monIdx && d.getDate() === day) return d;
+                        }
+                        return null;
+                    }
+
+                    const t = Date.parse(str);
+                    if (!isNaN(t)) {
+                        const d = new Date(t);
+                        if (!isNaN(d.getTime())) return d;
+                    }
+                }
+
+                return null;
+            }
+
+            function isDateStringInput(val) {
+                if (typeof val !== 'string') return false;
+                const str = val.trim();
+                if (!str || /^-?\d+(\.\d+)?$/.test(str)) return false;
+                const isDatePattern = /^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})|(\d{1,2}[-/.]\d{1,2}[-/.](\d{2}|\d{4}))|(\d{1,2}[-/.\s]+[a-zA-Z]+[-/.\s]+(\d{2}|\d{4}))|([a-zA-Z]+[-/.\s]+\d{1,2},?[-/.\s]+(\d{2}|\d{4}))$/.test(str);
+                if (!isDatePattern) return false;
+                return parseDate(str) !== null;
+            }
+
+            function formatDateDisplay(d, inputStr) {
+                if (!d || isNaN(d.getTime())) return '#INVALID DATE!';
+                const day = String(d.getDate()).padStart(2, '0');
+                const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const monthName = monthNames[d.getMonth()];
+
+                if (typeof inputStr === 'string') {
+                    const str = inputStr.trim();
+                    // dd-MMM-yyyy e.g. 20-Jan-2025, 01-Jan-2024
+                    if (/^\d{1,2}[-/.\s]+[a-zA-Z]{3,}[-/.\s]+\d{2,4}$/.test(str)) {
+                        return `${day}-${monthName}-${year}`;
+                    }
+                    // MMM dd, yyyy e.g. Jan 20, 2025
+                    if (/^[a-zA-Z]{3,}[-/.\s]+\d{1,2},?[-/.\s]+\d{2,4}$/.test(str)) {
+                        return `${monthName} ${day}, ${year}`;
+                    }
+                    // dd/mm/yyyy e.g. 20/01/2025
+                    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(str)) {
+                        return `${day}/${monthNum}/${year}`;
+                    }
+                    // dd-mm-yyyy e.g. 20-01-2025
+                    if (/^\d{1,2}-\d{1,2}-\d{2,4}$/.test(str)) {
+                        return `${day}-${monthNum}-${year}`;
+                    }
+                    // yyyy-mm-dd e.g. 2025-01-20
+                    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(str)) {
+                        return `${year}-${monthNum}-${day}`;
+                    }
+                }
+                return `${day}/${monthNum}/${year}`;
+            }
+
             function getDisplayValue(cell, refSelf) {
                 if (!cell) return '';
+                let val = cell.value;
                 if (cell.raw && cell.raw.startsWith('=')) {
                     try {
-                        return evaluateFormula(cell.raw, refSelf);
+                        val = evaluateFormula(cell.raw, refSelf);
                     } catch (e) {
                         return '#ERROR';
                     }
                 }
                 if (cell.format === 'currency') {
-                    const num = parseFloat(cell.value);
+                    const num = parseFloat(val);
                     if (!isNaN(num)) return '$' + num.toFixed(2);
                 }
                 if (cell.format === 'percent') {
-                    const num = parseFloat(cell.value);
+                    const num = parseFloat(val);
                     if (!isNaN(num)) return (num * 100).toFixed(1) + '%';
                 }
                 if (cell.format === 'date') {
-                    if (cell.value && !isNaN(Date.parse(cell.value))) {
-                        const d = new Date(cell.value);
-                        return d.toLocaleDateString();
-                    }
+                    if (val === '' || val === null || val === undefined) return '';
+                    const d = parseDate(val);
+                    if (d) return formatDateDisplay(d, cell.raw || val);
+                    return '#INVALID DATE!';
                 }
-                return cell.value !== undefined && cell.value !== null ? String(cell.value) : '';
+                return val !== undefined && val !== null ? String(val) : '';
             }
 
             function getCellValueNumeric(row, col) {
@@ -2097,6 +2259,11 @@
                 
                 cell.value = value;
                 cell.raw = raw !== undefined ? raw : String(value);
+
+                const inputStr = String(raw !== undefined ? raw : value);
+                if ((!cell.format || cell.format === 'general') && isDateStringInput(inputStr)) {
+                    cell.format = 'date';
+                }
                 
                 render();
                 updateSmartView();
@@ -3100,8 +3267,12 @@
                             }
                         } else {
                             cell.raw = val;
-                            const num = parseFloat(val);
-                            cell.value = isNaN(num) ? val : num;
+                            const isPureNum = /^-?\d+(\.\d+)?$/.test(val.trim());
+                            cell.value = isPureNum ? parseFloat(val) : val;
+                        }
+                        
+                        if ((!cell.format || cell.format === 'general') && isDateStringInput(val)) {
+                            cell.format = 'date';
                         }
                         
                         render();
@@ -4181,7 +4352,8 @@
                         e.stopPropagation();
                         const val = formulaInput.value;
                         const active = state.activeCell;
-                        setCellValue(active.row, active.col, val.startsWith('=') ? evaluateFormula(val, active) : (isNaN(parseFloat(val)) ? val : parseFloat(val)), val);
+                        const isPureNum = /^-?\d+(\.\d+)?$/.test(val.trim());
+                        setCellValue(active.row, active.col, val.startsWith('=') ? evaluateFormula(val, active) : (isPureNum ? parseFloat(val) : val), val);
                     }
                 });
 
@@ -4331,7 +4503,12 @@
                                 if (raw.startsWith('=')) {
                                     cellObj.f = raw.substring(1);
                                     const val = cellData.value;
-                                    if (typeof val === 'number') {
+                                    const dateObj = (cellData.format === 'date' || isDateStringInput(String(val))) ? parseDate(val) : null;
+                                    if (dateObj) {
+                                        cellObj.v = dateObj;
+                                        cellObj.t = 'd';
+                                        cellObj.z = 'yyyy-mm-dd';
+                                    } else if (typeof val === 'number') {
                                         cellObj.v = val;
                                         cellObj.t = 'n';
                                     } else {
@@ -4339,14 +4516,46 @@
                                         cellObj.t = 's';
                                     }
                                 } else {
-                                    const numVal = parseFloat(cellData.value);
-                                    if (!isNaN(numVal) && String(numVal) === String(cellData.value)) {
-                                        cellObj.v = numVal;
-                                        cellObj.t = 'n';
+                                    const val = cellData.value;
+                                    const dateObj = (cellData.format === 'date' || isDateStringInput(String(val))) ? parseDate(val) : null;
+                                    if (dateObj) {
+                                        cellObj.v = dateObj;
+                                        cellObj.t = 'd';
+                                        cellObj.z = 'yyyy-mm-dd';
+                                    } else if (cellData.format === 'currency') {
+                                        const numVal = parseFloat(val);
+                                        if (!isNaN(numVal)) {
+                                            cellObj.v = numVal;
+                                            cellObj.t = 'n';
+                                            cellObj.z = '"$"#,##0.00';
+                                        } else {
+                                            cellObj.v = String(val);
+                                            cellObj.t = 's';
+                                        }
+                                    } else if (cellData.format === 'percent') {
+                                        const numVal = parseFloat(val);
+                                        if (!isNaN(numVal)) {
+                                            cellObj.v = numVal;
+                                            cellObj.t = 'n';
+                                            cellObj.z = '0.0%';
+                                        } else {
+                                            cellObj.v = String(val);
+                                            cellObj.t = 's';
+                                        }
                                     } else {
-                                        cellObj.v = String(cellData.value);
-                                        cellObj.t = 's';
+                                        const numVal = parseFloat(val);
+                                        if (!isNaN(numVal) && String(numVal) === String(val)) {
+                                            cellObj.v = numVal;
+                                            cellObj.t = 'n';
+                                        } else {
+                                            cellObj.v = String(val);
+                                            cellObj.t = 's';
+                                        }
                                     }
+                                }
+
+                                if (cellData.format === 'date' && !cellObj.z) {
+                                    cellObj.z = 'yyyy-mm-dd';
                                 }
                                 ws[cellRef] = cellObj;
                             }
@@ -4381,7 +4590,7 @@
                     reader.onload = function(evt) {
                         try {
                             const data = new Uint8Array(evt.target.result);
-                            const workbook = XLSX.read(data, { type: 'array' });
+                            const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: true });
                             
                             const firstSheetName = workbook.SheetNames[0];
                             const ws = workbook.Sheets[firstSheetName];
@@ -4411,20 +4620,36 @@
                                     if (cellObj) {
                                         let raw = '';
                                         let value = '';
+                                        let format = 'general';
                                         
                                         if (cellObj.f) {
                                             raw = '=' + cellObj.f;
                                             value = cellObj.v !== undefined ? cellObj.v : '';
                                         } else {
-                                            raw = cellObj.v !== undefined ? String(cellObj.v) : '';
-                                            value = cellObj.v !== undefined ? cellObj.v : '';
+                                            if (cellObj.v instanceof Date) {
+                                                value = cellObj.v.toLocaleDateString();
+                                                raw = value;
+                                            } else {
+                                                raw = cellObj.v !== undefined ? String(cellObj.v) : '';
+                                                value = cellObj.v !== undefined ? cellObj.v : '';
+                                            }
+                                        }
+
+                                        if (cellObj.t === 'd' || cellObj.v instanceof Date || (cellObj.z && /y|m|d/i.test(cellObj.z) && !/cy/i.test(cellObj.z))) {
+                                            format = 'date';
+                                        } else if (cellObj.z && cellObj.z.includes('$')) {
+                                            format = 'currency';
+                                        } else if (cellObj.z && cellObj.z.includes('%')) {
+                                            format = 'percent';
+                                        } else if (isDateStringInput(String(value))) {
+                                            format = 'date';
                                         }
                                         
                                         state.cells[r][c] = {
                                             value: value,
                                             raw: raw,
                                             style: {},
-                                            format: 'general'
+                                            format: format
                                         };
                                     }
                                 }
