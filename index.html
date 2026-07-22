@@ -539,6 +539,7 @@
             height: 100%;
             display: flex;
             align-items: center;
+            justify-content: inherit;
         }
         .grid .cell .cell-input {
             position: absolute;
@@ -1298,6 +1299,8 @@
                         <div class="divider"></div>
                         <div class="item" onclick="sortSelectedRange(true)">Sort A-Z (Ascending)</div>
                         <div class="item" onclick="sortSelectedRange(false)">Sort Z-A (Descending)</div>
+                        <div class="divider"></div>
+                        <div class="item" onclick="toggleMergeCenter()">Merge & Center</div>
                     </div>
                 </div>
                 <div class="menu-item-container">
@@ -1306,6 +1309,8 @@
                         <div class="item" onclick="applyStyle({ bold: !getCurrentStyle('bold') })">Bold <span class="shortcut">Ctrl+B</span></div>
                         <div class="item" onclick="applyStyle({ italic: !getCurrentStyle('italic') })">Italic <span class="shortcut">Ctrl+I</span></div>
                         <div class="item" onclick="applyStyle({ underline: !getCurrentStyle('underline') })">Underline <span class="shortcut">Ctrl+U</span></div>
+                        <div class="divider"></div>
+                        <div class="item" onclick="toggleMergeCenter()">Merge & Center</div>
                         <div class="divider"></div>
                         <div class="item" onclick="applyFormat('general')">General</div>
                         <div class="item" onclick="applyFormat('currency')">Currency ($)</div>
@@ -1331,6 +1336,7 @@
                     <button id="btnBold" title="Bold (Ctrl+B)"><b>B</b></button>
                     <button id="btnItalic" title="Italic (Ctrl+I)"><i>I</i></button>
                     <button id="btnUnderline" title="Underline (Ctrl+U)"><u>U</u></button>
+                    <button id="btnMergeCenter" data-testid="merge-center-button" title="Merge & Center Cells (Toggle)">⊞ Merge & Center</button>
                 </div>
                 <div class="group">
                     <select id="fontSizeSelect" class="format-input" title="Font Size">
@@ -1469,6 +1475,8 @@
         <div class="divider"></div>
         <div class="item" data-action="sort-asc">Sort A-Z (Ascending)</div>
         <div class="item" data-action="sort-desc">Sort Z-A (Descending)</div>
+        <div class="divider"></div>
+        <div class="item" data-action="merge-center">⊞ Merge & Center</div>
         <div class="divider"></div>
         <div class="item" data-action="insert-row-above">Insert row above</div>
         <div class="item" data-action="insert-row-below">Insert row below</div>
@@ -1780,6 +1788,8 @@
 
                     for (let c = 0; c < COLS; c++) {
                         const cell = state.cells[r][c];
+                        if (cell.mergedParent) continue;
+
                         const isActive = state.activeCell.row === r && state.activeCell.col === c;
                         const isSelected = isCellSelected(r, c);
                         const isRange = isCellInRange(r, c);
@@ -1789,13 +1799,17 @@
                         if (isSelected && state.selection.type === 'cell') classes += ' selected';
                         if (isRange && state.selection.type === 'range') classes += ' range-selected';
                         if (isSelected && state.selection.type === 'range') classes += ' selected';
+                        if (cell.rowspan > 1 || cell.colspan > 1) classes += ' merged-cell';
 
                         const displayVal = getDisplayValue(cell, { row: r, col: c });
                         const styleStr = buildCellStyle(cell);
 
+                        const rowSpanAttr = cell.rowspan > 1 ? ` / span ${cell.rowspan}` : '';
+                        const colSpanAttr = cell.colspan > 1 ? ` / span ${cell.colspan}` : '';
+
                         html += `<div class="${classes}" 
                                    data-row="${r}" data-col="${c}" data-testid="cell-${r}-${c}" 
-                                   style="grid-row:${r+2};grid-column:${c+2};${styleStr}">
+                                   style="grid-row:${r+2}${rowSpanAttr};grid-column:${c+2}${colSpanAttr};${styleStr}">
                                 <span class="cell-content">${escapeHtml(displayVal)}</span>
                              </div>`;
                     }
@@ -2004,24 +2018,56 @@
                     .replace(/"/g, '&quot;');
             }
 
+            function getRootCell(r, c) {
+                const cell = state.cells[r] && state.cells[r][c];
+                if (cell && cell.mergedParent) {
+                    return cell.mergedParent;
+                }
+                return { row: r, col: c };
+            }
+
+            function expandRangeForMerges(sR, eR, sC, eC) {
+                let minR = Math.min(sR, eR);
+                let maxR = Math.max(sR, eR);
+                let minC = Math.min(sC, eC);
+                let maxC = Math.max(sC, eC);
+                let changed = true;
+                while (changed) {
+                    changed = false;
+                    for (let r = minR; r <= maxR; r++) {
+                        for (let c = minC; c <= maxC; c++) {
+                            const root = getRootCell(r, c);
+                            const cell = getCell(root.row, root.col);
+                            if (cell) {
+                                const cellMaxR = root.row + (cell.rowspan || 1) - 1;
+                                const cellMaxC = root.col + (cell.colspan || 1) - 1;
+                                if (root.row < minR) { minR = root.row; changed = true; }
+                                if (cellMaxR > maxR) { maxR = cellMaxR; changed = true; }
+                                if (root.col < minC) { minC = root.col; changed = true; }
+                                if (cellMaxC > maxC) { maxC = cellMaxC; changed = true; }
+                            }
+                        }
+                    }
+                }
+                return { minR, maxR, minC, maxC };
+            }
+
             function isCellSelected(r, c) {
                 const sel = state.selection;
+                const root = getRootCell(r, c);
                 if (sel.type === 'cell') {
-                    return sel.activeRow === r && sel.activeCol === c;
+                    const activeRoot = getRootCell(sel.activeRow, sel.activeCol);
+                    return activeRoot.row === root.row && activeRoot.col === root.col;
                 }
                 if (sel.type === 'range') {
-                    return r >= Math.min(sel.startRow, sel.endRow) &&
-                        r <= Math.max(sel.startRow, sel.endRow) &&
-                        c >= Math.min(sel.startCol, sel.endCol) &&
-                        c <= Math.max(sel.startCol, sel.endCol);
+                    const exp = expandRangeForMerges(sel.startRow, sel.endRow, sel.startCol, sel.endCol);
+                    return root.row >= exp.minR && root.row <= exp.maxR && root.col >= exp.minC && root.col <= exp.maxC;
                 }
                 if (sel.type === 'row') {
-                    return r >= Math.min(sel.startRow, sel.endRow) &&
-                        r <= Math.max(sel.startRow, sel.endRow);
+                    return root.row >= Math.min(sel.startRow, sel.endRow) && root.row <= Math.max(sel.startRow, sel.endRow);
                 }
                 if (sel.type === 'col') {
-                    return c >= Math.min(sel.startCol, sel.endCol) &&
-                        c <= Math.max(sel.startCol, sel.endCol);
+                    return root.col >= Math.min(sel.startCol, sel.endCol) && root.col <= Math.max(sel.startCol, sel.endCol);
                 }
                 if (sel.type === 'table') return true;
                 return false;
@@ -2030,10 +2076,9 @@
             function isCellInRange(r, c) {
                 const sel = state.selection;
                 if (sel.type !== 'range') return false;
-                return r >= Math.min(sel.startRow, sel.endRow) &&
-                    r <= Math.max(sel.startRow, sel.endRow) &&
-                    c >= Math.min(sel.startCol, sel.endCol) &&
-                    c <= Math.max(sel.startCol, sel.endCol);
+                const root = getRootCell(r, c);
+                const exp = expandRangeForMerges(sel.startRow, sel.endRow, sel.startCol, sel.endCol);
+                return root.row >= exp.minR && root.row <= exp.maxR && root.col >= exp.minC && root.col <= exp.maxC;
             }
 
             function focusGrid() {
@@ -2081,6 +2126,14 @@
                 updateSmartView();
                 updateFormulaBar();
                 focusGrid();
+
+                const btnMerge = document.getElementById('btnMergeCenter');
+                if (btnMerge) {
+                    const root = getRootCell(state.activeCell.row, state.activeCell.col);
+                    const cell = getCell(root.row, root.col);
+                    const isMerged = cell && (cell.rowspan > 1 || cell.colspan > 1);
+                    btnMerge.classList.toggle('active', !!isMerged);
+                }
             }
 
             function getCell(row, col) {
@@ -2452,8 +2505,13 @@
             function updateAutofillHandle() {
                 const sel = state.selection;
                 if (sel.type === 'cell' || sel.type === 'range') {
-                    const r = sel.type === 'cell' ? sel.activeRow : Math.max(sel.startRow, sel.endRow);
-                    const c = sel.type === 'cell' ? sel.activeCol : Math.max(sel.startCol, sel.endCol);
+                    let r = sel.type === 'cell' ? sel.activeRow : Math.max(sel.startRow, sel.endRow);
+                    let c = sel.type === 'cell' ? sel.activeCol : Math.max(sel.startCol, sel.endCol);
+                    if (sel.type === 'range') {
+                        const exp = expandRangeForMerges(sel.startRow, sel.endRow, sel.startCol, sel.endCol);
+                        r = exp.maxR;
+                        c = exp.maxC;
+                    }
                     const cellEl = getCellElement(r, c);
                     if (cellEl) {
                         const rect = cellEl.getBoundingClientRect();
@@ -2472,13 +2530,10 @@
             function updateSelectionOverlay() {
                 const sel = state.selection;
                 if (sel.type === 'range') {
-                    const r1 = Math.min(sel.startRow, sel.endRow);
-                    const r2 = Math.max(sel.startRow, sel.endRow);
-                    const c1 = Math.min(sel.startCol, sel.endCol);
-                    const c2 = Math.max(sel.startCol, sel.endCol);
+                    const exp = expandRangeForMerges(sel.startRow, sel.endRow, sel.startCol, sel.endCol);
 
-                    const topLeft = getCellPosition(r1, c1);
-                    const bottomRight = getCellPosition(r2, c2);
+                    const topLeft = getCellPosition(exp.minR, exp.minC);
+                    const bottomRight = getCellPosition(exp.maxR, exp.maxC);
                     if (topLeft && bottomRight) {
                         const containerRect = tableContainer.getBoundingClientRect();
                         const scrollLeft = tableWrapper.scrollLeft;
@@ -2503,9 +2558,10 @@
             }
 
             function getCellElement(row, col) {
+                const root = getRootCell(row, col);
                 const cells = grid.querySelectorAll('.cell');
                 for (const el of cells) {
-                    if (parseInt(el.dataset.row) === row && parseInt(el.dataset.col) === col) {
+                    if (parseInt(el.dataset.row) === root.row && parseInt(el.dataset.col) === root.col) {
                         return el;
                     }
                 }
@@ -4048,6 +4104,102 @@
                 setStatus('Style format applied');
             }
 
+            // Toggle Merged Cells & Center alignment for current selection
+            function toggleMergeCenter() {
+                const sel = state.selection;
+                let sR = 0, eR = 0, sC = 0, eC = 0;
+
+                if (sel.type === 'cell') {
+                    const root = getRootCell(sel.activeRow, sel.activeCol);
+                    const cell = getCell(root.row, root.col);
+                    if (cell && (cell.rowspan > 1 || cell.colspan > 1)) {
+                        sR = root.row;
+                        eR = root.row + (cell.rowspan || 1) - 1;
+                        sC = root.col;
+                        eC = root.col + (cell.colspan || 1) - 1;
+                    } else {
+                        setStatus('Select 2 or more cells to merge!');
+                        return;
+                    }
+                } else if (sel.type === 'range') {
+                    sR = Math.min(sel.startRow, sel.endRow);
+                    eR = Math.max(sel.startRow, sel.endRow);
+                    sC = Math.min(sel.startCol, sel.endCol);
+                    eC = Math.max(sel.startCol, sel.endCol);
+                } else if (sel.type === 'row') {
+                    sR = eR = sel.activeRow;
+                    sC = 0; eC = COLS - 1;
+                } else if (sel.type === 'col') {
+                    sR = 0; eR = ROWS - 1;
+                    sC = eC = sel.activeCol;
+                } else if (sel.type === 'table') {
+                    sR = 0; eR = ROWS - 1;
+                    sC = 0; eC = COLS - 1;
+                } else {
+                    return;
+                }
+
+                if (sR === eR && sC === eC) {
+                    setStatus('Select 2 or more cells to merge!');
+                    return;
+                }
+
+                pushUndo();
+
+                const rootCell = getCell(sR, sC);
+                const targetRowSpan = eR - sR + 1;
+                const targetColSpan = eC - sC + 1;
+                const isAlreadyMerged = rootCell && rootCell.rowspan === targetRowSpan && rootCell.colspan === targetColSpan;
+
+                if (isAlreadyMerged) {
+                    // UNMERGE
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            const cell = getCell(r, c);
+                            if (cell) {
+                                delete cell.rowspan;
+                                delete cell.colspan;
+                                delete cell.mergedParent;
+                            }
+                        }
+                    }
+                    setStatus('Cells unmerged');
+                } else {
+                    // MERGE & CENTER
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            const cell = getCell(r, c);
+                            if (cell) {
+                                delete cell.rowspan;
+                                delete cell.colspan;
+                                delete cell.mergedParent;
+                            }
+                        }
+                    }
+                    rootCell.rowspan = targetRowSpan;
+                    rootCell.colspan = targetColSpan;
+                    rootCell.style = { ...rootCell.style, align: 'center' };
+
+                    for (let r = sR; r <= eR; r++) {
+                        for (let c = sC; c <= eC; c++) {
+                            if (r === sR && c === sC) continue;
+                            const cell = getCell(r, c);
+                            if (cell) {
+                                cell.mergedParent = { row: sR, col: sC };
+                            }
+                        }
+                    }
+                    const startRef = `${colToLetter(sC)}${sR + 1}`;
+                    const endRef = `${colToLetter(eC)}${eR + 1}`;
+                    setStatus(`Merged & centered cells from ${startRef} to ${endRef}`);
+                }
+
+                selectCell(sR, sC, false);
+                render();
+                updateSelectionUI();
+                checkMissionProgress();
+            }
+
             // -------- ROW AND COLUMN STRUCTURAL SHIFTS --------
             function insertRowAbove() {
                 const row = state.activeCell.row;
@@ -4208,6 +4360,7 @@
                 document.getElementById('btnCreateChart').addEventListener('click', openChartModal);
                 document.getElementById('btnSubmitChart').addEventListener('click', generateChartFromModal);
                 document.getElementById('btnMagicFill').addEventListener('click', magicFill);
+                document.getElementById('btnMergeCenter').addEventListener('click', toggleMergeCenter);
 
                 // Theme changes
                 document.querySelectorAll('.theme-btn').forEach(btn => {
